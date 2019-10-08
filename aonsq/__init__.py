@@ -336,7 +336,7 @@ if __name__ == "__main__":
 
 
     async def test():
-        mq = NSQ(host="209.182.233.45", port=4011)
+        mq = NSQ(host="127.0.0.1", port=4070)
         await mq.connect()
         await mq.sub("demo", "test", msg_handler)
 
