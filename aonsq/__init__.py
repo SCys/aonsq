@@ -104,7 +104,7 @@ class NSQBasic:
         info = orjson.dumps(
             {
                 "hostname": await public_ip(),
-                "client_id": ''.join(random.choice(string.ascii_lowercase) for _ in range(8)),
+                "client_id": "".join(random.choice(string.ascii_lowercase) for _ in range(8)),
                 "user_agent": "aonsq.py/0.0.1",
                 "deflate": True,
                 "deflate_level": 5,
@@ -139,7 +139,7 @@ class NSQBasic:
                 self.tx_queue.task_done()
 
                 if topic not in messages:
-                    messages[topic] = [0, b'']
+                    messages[topic] = [0, b""]
 
                 messages[topic][0] += 1
                 messages[topic][1] += len(content).to_bytes(4, "big") + content
@@ -160,7 +160,7 @@ class NSQBasic:
                     self.sent += content[0]
 
                 except ConnectionError as exc:
-                    w(f'connection error, recovery the unsent messages:{str(exc)}')
+                    w(f"connection error, recovery the unsent messages:{str(exc)}")
 
                     # recovery in the tx_queue end
                     for item in queues:
@@ -177,12 +177,14 @@ class NSQBasic:
             try:
                 raw = await self.reader.readexactly(4)
             except ConnectionError as exc:
-                e(f'connection error:{str(exc)}')
+                e(f"read head connection error:{str(exc)}")
+                await asyncio.sleep(1)
                 await self.connect()
                 continue
 
             except asyncio.streams.IncompleteReadError as exc:
-                e(f'connection error:{str(exc)}')
+                e(f"steam incomplete read error:{str(exc)}")
+                await asyncio.sleep(1)
                 await self.connect()
                 continue
 
@@ -194,7 +196,8 @@ class NSQBasic:
             try:
                 resp = await self.reader.readexactly(size)
             except ConnectionError as exc:
-                e(f'connection error:{str(exc)}')
+                e(f"read content connection error:{str(exc)}")
+                await asyncio.sleep(1)
                 await self.connect()
                 continue
 
@@ -251,22 +254,31 @@ class NSQBasic:
                 d(f"sub {self.topic} {self.channel} cost {self.cost}")
                 self.rdy = RDY_SIZE
 
-                # self.writer.write(f"SUB {self.topic} {self.channel}\n".encode())
-                self.writer.write(f"RDY {self.rdy}\n".encode())
-                await self.writer.drain()
+                while True:
+                    try:
+                        self.writer.write(f"RDY {self.rdy}\n".encode())
+                        await self.writer.drain()
+                        break
+                    except ConnectionError as e:
+                        w(f"rdy with connection error:{e}")
+                        self.reader.set_exception(e)
+                        await asyncio.sleep(3)
 
+            self.rdy -= 1
+            send_fin = True
             if self.handler is not None:
-                self.rdy -= 1
+                send_fin = await self.handler(msg)
 
-                if await self.handler(msg):
+            try:
+                if send_fin:
                     self.writer.write(f"FIN {msg.id}\n".encode())
                 else:
                     self.writer.write(f"REQ {msg.id}\n".encode())
 
                 await self.writer.drain()
-            else:
-                self.writer.write(f"FIN {msg.id}\n".encode())
-                await self.writer.drain()
+            except ConnectionError as e:
+                w(f"fin/req with connection error")
+                self.reader.set_exception(e)
 
             self.rx_queue.task_done()
 
@@ -330,10 +342,10 @@ class NSQ(NSQBasic):
 
 
 if __name__ == "__main__":
+
     async def msg_handler(msg: NSQMessage) -> bool:
         # d(f"msg: {msg.id}")
         return True
-
 
     async def test():
         mq = NSQ(host="127.0.0.1", port=4070)
@@ -345,7 +357,6 @@ if __name__ == "__main__":
                 await mq.pub("demo", orjson.dumps({"id": j, "ts_created": datetime.now(timezone.utc)}))
 
             await asyncio.sleep(1)
-
 
     try:
         asyncio.get_event_loop().run_until_complete(test())

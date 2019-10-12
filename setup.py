@@ -3,12 +3,12 @@ import setuptools
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
-with open('requirements.txt') as f:
+with open("requirements.txt") as f:
     requirements = f.read().splitlines()
 
 setuptools.setup(
     name="aonsq",
-    version="0.0.1",
+    version="0.0.2",
     author="SCys",
     author_email="me@iscys.com",
     description="an other async nsq client library",
@@ -25,6 +25,6 @@ setuptools.setup(
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
     ],
-    python_requires='>=3.6',
+    python_requires=">=3.6",
     install_requires=requirements,
 )
