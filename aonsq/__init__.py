@@ -16,13 +16,13 @@ w = logger.warning
 e = logger.error
 
 PKG_MAGIC = b"  V2"
-RDY_SIZE = 2500
+RDY_SIZE = 1000
 MSG_SIZE = 1024 * 1024  # default is 1Mb
 
 
 async def public_ip():
     async with aiohttp.ClientSession() as session:
-        async with session.get("https://api.ipify.org") as response:
+        async with session.get("http://ip.sb") as response:
             return await response.text()
 
 
@@ -105,7 +105,7 @@ class NSQBasic:
             {
                 "hostname": await public_ip(),
                 "client_id": "".join(random.choice(string.ascii_lowercase) for _ in range(8)),
-                "user_agent": "aonsq.py/0.0.1",
+                "user_agent": "aonsq.py/0.0.3",
                 "deflate": True,
                 "deflate_level": 5,
             }
@@ -213,6 +213,7 @@ class NSQBasic:
 
                 if frame_data == b"_heartbeat_":
                     self.writer.write(b"NOP\n")
+                    continue
 
                 d(f"response /{frame_data.decode()}/")
                 continue
@@ -251,7 +252,7 @@ class NSQBasic:
             msg = await self.rx_queue.get()
 
             if self.rdy <= 0:
-                d(f"sub {self.topic} {self.channel} cost {self.cost}")
+                # d(f"sub {self.topic} {self.channel} cost {self.cost}")
                 self.rdy = RDY_SIZE
 
                 while True:
