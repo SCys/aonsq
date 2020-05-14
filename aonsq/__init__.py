@@ -73,7 +73,7 @@ class NSQBasic:
 
         self.is_connect = True
 
-        i(f"nsq:{self.host}:{self.port}")
+        # d(f"nsq:{self.host}:{self.port}")
 
         if not await self._send_identify():
             w("send identify error")
