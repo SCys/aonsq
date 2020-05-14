@@ -22,7 +22,7 @@ MSG_SIZE = 1024 * 1024  # default is 1Mb
 
 async def public_ip():
     async with aiohttp.ClientSession() as session:
-        async with session.get("http://ip.sb") as response:
+        async with session.get("https://api.ip.sb/ip") as response:
             return await response.text()
 
 
@@ -55,12 +55,16 @@ class NSQBasic:
 
     sent: int = 0
     cost: int = 0
-    rdy: int = 0
+    rdy: int = RDY_SIZE
 
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+
     _busy_tx = False
     _busy_rx = False
     _busy_sub = False
+    _busy_watchdog = False
+
+    _connect_is_broken = False
 
     async def connect(self):
         reader, writer = await asyncio.open_connection(self.host, self.port)
@@ -75,7 +79,7 @@ class NSQBasic:
 
         # d(f"nsq:{self.host}:{self.port}")
 
-        if not await self._send_identify():
+        if not await self.send_identify():
             w("send identify error")
             self.is_connect = False
             return
@@ -89,6 +93,9 @@ class NSQBasic:
         if not self._busy_sub:
             asyncio.create_task(self._sub_worker())
 
+        if not self._busy_watchdog:
+            asyncio.create_task(self._watchdog())
+
     async def disconnect(self):
         if self.writer is not None:
             self.writer.close()
@@ -100,7 +107,7 @@ class NSQBasic:
 
         self.is_connect = False
 
-    async def _send_identify(self):
+    async def send_identify(self):
         info = orjson.dumps(
             {
                 "hostname": await public_ip(),
@@ -120,13 +127,26 @@ class NSQBasic:
         resp = await self.reader.readexactly(size)
         if resp[4:] == b"OK":
             return True
+
         w(f"identify error:{resp[4:].decode()}")
         return False
+
+    async def send_sub(self):
+        writer.write(f"SUB {self.topic} {self.channel}\n".encode())
+        await writer.drain()
+
+    async def send_rdy(self):
+        writer.write(f"RDY {self.rdy}\n".encode())
+        await writer.drain()
 
     async def _tx_worker(self):
         self._busy_tx = True
 
         while self.is_connect:
+            # break the main loop
+            if self._connect_is_broken:
+                break
+
             tx_size = self.tx_queue.qsize()
             if tx_size == 0:
                 await asyncio.sleep(0.1)
@@ -166,6 +186,8 @@ class NSQBasic:
                     for item in queues:
                         self.tx_queue.put_nowait(item)
 
+                    self._connect_is_broken = True
+
                     break
 
         self._busy_tx = False
@@ -174,19 +196,23 @@ class NSQBasic:
         self._busy_rx = True
 
         while self.is_connect:
+            # break the main loop
+            if self._connect_is_broken:
+                break
+
             try:
                 raw = await self.reader.readexactly(4)
             except ConnectionError as exc:
                 e(f"read head connection error:{str(exc)}")
-                await asyncio.sleep(1)
-                await self.connect()
-                continue
+
+                self._connect_is_broken = True
+                break
 
             except asyncio.streams.IncompleteReadError as exc:
                 e(f"steam incomplete read error:{str(exc)}")
-                await asyncio.sleep(1)
-                await self.connect()
-                continue
+
+                self._connect_is_broken = True
+                break
 
             size = int.from_bytes(raw, byteorder="big")
             if MSG_SIZE < size or size < 6:
@@ -197,8 +223,8 @@ class NSQBasic:
                 resp = await self.reader.readexactly(size)
             except ConnectionError as exc:
                 e(f"read content connection error:{str(exc)}")
-                await asyncio.sleep(1)
-                await self.connect()
+
+                self._connect_is_broken = True
                 continue
 
             frame_type = int.from_bytes(resp[:4], byteorder="big")
@@ -220,7 +246,9 @@ class NSQBasic:
 
             elif frame_type == 1:  # error
                 w(f"error response:{frame_data.decode()}")
-                continue
+
+                self._connect_is_broken = True
+                break
 
             elif frame_type == 2:  # message
                 # msg_raw = zlib.decompress(frame_data)
@@ -281,9 +309,33 @@ class NSQBasic:
                 w(f"fin/req with connection error")
                 self.reader.set_exception(e)
 
+                self._connect_is_broken = True
+                break
+
             self.rx_queue.task_done()
 
         self._busy_sub = False
+
+    async def _watchdog(self):
+        self._busy_sub = True
+
+        # stauts is recover or normal
+        while self.is_connect:
+            await asyncio.sleep(1)
+
+            if self._connect_is_broken:
+                await asyncio.sleep(5)
+
+                d("nsq connection is being reconnected")
+
+                await self.disconnect()
+                await self.connect()
+
+                await self.send_identify()
+                await self.send_sub()
+                await self.send_rdy()
+
+        self._busy_watchdog = False
 
 
 @dataclass
@@ -314,32 +366,17 @@ class NSQ(NSQBasic):
         if channel in self.sub_mq:
             return self.sub_mq[topic][channel]
 
-        mq = NSQBasic(host=self.host, port=self.port, topic=topic, channel=channel, handler=handler)
-        await mq.connect()
-
-        if not mq.is_connect:
+        cli = NSQBasic(host=self.host, port=self.port, topic=topic, channel=channel, handler=handler)
+        await cli.connect()
+        if not cli.is_connect:
             return
 
-        writer = mq.writer
+        await cli.send_sub()
+        await cli.send_rdy()
 
-        if not writer:
-            return
+        self.sub_mq[topic][channel] = cli
 
-        self.sub_mq[topic][channel] = mq
-
-        writer.write(f"SUB {topic} {channel}\n".encode())
-        await writer.drain()
-
-        self.topic = topic
-        self.channel = channel
-        self.handler = handler
-        self.cost = 0
-        self.rdy = RDY_SIZE
-
-        writer.write(f"RDY {self.rdy}\n".encode())
-        await writer.drain()
-
-        return mq
+        return cli
 
 
 if __name__ == "__main__":
