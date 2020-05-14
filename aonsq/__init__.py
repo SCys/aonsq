@@ -359,7 +359,7 @@ class NSQBasic:
                 self.rdy -= 1
                 continue
 
-            while len(tasks) <= RDY_SIZE or not self.rx_queue.empty():
+            while len(tasks) <= RDY_SIZE and not self.rx_queue.empty():
                 msg = await self.rx_queue.get()
 
                 task = asyncio.create_task(self._sub_task(self.handler, msg))
@@ -367,10 +367,10 @@ class NSQBasic:
 
                 self.rx_queue.task_done()
 
-            done, pending = await asyncio.wait(tasks, timeout=0.75, return_when=asyncio.FIRST_COMPLETED)
-            tasks = list(pending)
-            
-            d(f"total {len(done)} tasks is done")
+            if tasks:
+                done, pending = await asyncio.wait(tasks, timeout=0.75, return_when=asyncio.FIRST_COMPLETED)
+                tasks = list(pending)
+                d(f"total {len(done)} tasks is done")
 
         self._busy_sub = False
 
