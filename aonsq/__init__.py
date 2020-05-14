@@ -329,9 +329,10 @@ class NSQBasic:
                 d("nsq connection is being reconnected")
 
                 await self.disconnect()
+                await asyncio.sleep(1)
+
                 await self.connect()
 
-                await self.send_identify()
                 await self.send_sub()
                 await self.send_rdy()
 
