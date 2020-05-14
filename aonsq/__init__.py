@@ -4,11 +4,28 @@ import string
 from asyncio.streams import StreamReader, StreamWriter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Awaitable, Callable, Dict, Optional
+from typing import Any, Awaitable, Callable, Dict, Optional, Union
+
+import orjson
 
 import aiohttp
-import orjson
 from loguru import logger
+
+# try:
+#     import snappy
+
+#     support_snappy = True
+# except ImportError:
+#     support_snappy = False
+
+
+# try:
+#     import zlib
+
+#     support_deflate = True
+# except ImportError:
+#     support_deflate = False
+
 
 i = logger.info
 d = logger.debug
@@ -16,7 +33,7 @@ w = logger.warning
 e = logger.error
 
 PKG_MAGIC = b"  V2"
-RDY_SIZE = 1000
+RDY_SIZE = 500
 MSG_SIZE = 1024 * 1024  # default is 1Mb
 
 
@@ -69,11 +86,10 @@ class NSQBasic:
     async def connect(self):
         reader, writer = await asyncio.open_connection(self.host, self.port)
 
-        writer.write(b"  V2")
-        await writer.drain()
-
         self.reader = reader
         self.writer = writer
+
+        self.write(b"  V2")
 
         self.is_connect = True
 
@@ -112,19 +128,16 @@ class NSQBasic:
             {
                 "hostname": await public_ip(),
                 "client_id": "".join(random.choice(string.ascii_lowercase) for _ in range(8)),
-                "user_agent": "aonsq.py/0.0.3",
-                "deflate": True,
-                "deflate_level": 5,
+                "user_agent": "aonsq.py/0.0.4",
+                # "deflate": True,
+                # "deflate_level": 10,
+                "msg_timeout": 30 * 1000,  # 30s
             }
         )
 
-        self.writer.write(f"IDENTIFY\n".encode() + len(info).to_bytes(4, "big") + info)
-        await self.writer.drain()
+        await self.write(f"IDENTIFY\n".encode() + len(info).to_bytes(4, "big") + info)
 
-        raw = await self.reader.readexactly(4)
-        size = int.from_bytes(raw, byteorder="big")
-
-        resp = await self.reader.readexactly(size)
+        resp = await self.read()
         if resp[4:] == b"OK":
             return True
 
@@ -132,12 +145,10 @@ class NSQBasic:
         return False
 
     async def send_sub(self):
-        self.writer.write(f"SUB {self.topic} {self.channel}\n".encode())
-        await self.writer.drain()
+        await self.write(f"SUB {self.topic} {self.channel}\n")
 
     async def send_rdy(self):
-        self.writer.write(f"RDY {self.rdy}\n".encode())
-        await self.writer.drain()
+        await self.write(f"RDY {self.rdy}\n")
 
     async def _tx_worker(self):
         self._busy_tx = True
@@ -147,44 +158,53 @@ class NSQBasic:
             if self._connect_is_broken:
                 break
 
-            tx_size = self.tx_queue.qsize()
-            if tx_size == 0:
+            if self.tx_queue.empty():
                 await asyncio.sleep(0.1)
                 continue
 
             messages = {}
-            queues = []
+
+            tx_size = self.tx_queue.qsize()
             for _ in range(tx_size):
                 topic, content = await self.tx_queue.get()
+
+                if topic in messages:
+                    messages[topic].append(content)
+                else:
+                    messages[topic] = [content]
+
                 self.tx_queue.task_done()
 
-                if topic not in messages:
-                    messages[topic] = [0, b""]
+            topics_is_done = []
+            for topic, items in messages.items():
+                raw = ""
+                size = len(items)
 
-                messages[topic][0] += 1
-                messages[topic][1] += len(content).to_bytes(4, "big") + content
-                queues.append((topic, content))
+                if size == 1:
+                    raw = f"PUB {topic}\n".encode()
+                else:
+                    raw = f"MPUB {topic}\n".encode()
+                    raw += size.to_bytes(4, "big")
 
-            for topic, content in messages.items():
-                raw = f"MPUB {topic}\n".encode()
-                raw += len(content[1]).to_bytes(4, "big")
-                raw += content[0].to_bytes(4, "big")
-                raw += content[1]
-
-                queues.pop()
+                for item in items:
+                    raw += len(item).to_bytes(4, "big") + item.encode()
 
                 try:
-                    self.writer.write(raw)
-                    await self.writer.drain()
+                    await self.write(raw)
+                    self.sent += size
 
-                    self.sent += content[0]
+                    topics_is_done.append(topic)
 
                 except ConnectionError as exc:
                     w(f"connection error, recovery the unsent messages:{str(exc)}")
 
                     # recovery in the tx_queue end
-                    for item in queues:
-                        self.tx_queue.put_nowait(item)
+                    for name, items in messages.items():
+                        if name in topics_is_done:
+                            continue
+
+                        for item in items:
+                            self.tx_queue.put_nowait([name, item])
 
                     self._connect_is_broken = True
 
@@ -238,7 +258,7 @@ class NSQBasic:
                 #     i("server return close wait")
 
                 if frame_data == b"_heartbeat_":
-                    self.writer.write(b"NOP\n")
+                    await self.write(b"NOP\n")
                     continue
 
                 d(f"response /{frame_data.decode()}/")
@@ -276,45 +296,79 @@ class NSQBasic:
     async def _sub_worker(self):
         self._busy_sub = True
 
+        tasks = []
+
         while self.is_connect:
-            msg = await self.rx_queue.get()
+            if self.rx_queue.empty():
+                await asyncio.sleep(0.75)
+                continue
 
             if self.rdy <= 0:
                 # d(f"sub {self.topic} {self.channel} cost {self.cost}")
                 self.rdy = RDY_SIZE
 
-                while True:
-                    try:
-                        self.writer.write(f"RDY {self.rdy}\n".encode())
-                        await self.writer.drain()
-                        break
-                    except ConnectionError as e:
-                        w(f"rdy with connection error:{e}")
-                        self.reader.set_exception(e)
-                        await asyncio.sleep(3)
+                try:
+                    await self.write(f"RDY {self.rdy}\n")
+                except ConnectionError as e:
+                    w(f"rdy with connection error:{e}")
+                    self.reader.set_exception(e)
 
-            self.rdy -= 1
-            send_fin = True
-            if self.handler is not None:
-                send_fin = await self.handler(msg)
+                    self._connect_is_broken = True
+                    break
 
-            try:
-                if send_fin:
-                    self.writer.write(f"FIN {msg.id}\n".encode())
-                else:
-                    self.writer.write(f"REQ {msg.id}\n".encode())
+                continue
 
-                await self.writer.drain()
-            except ConnectionError as e:
-                w(f"fin/req with connection error")
-                self.reader.set_exception(e)
+            if self.handler is None:
+                msg = await self.rx_queue.get()
 
-                self._connect_is_broken = True
-                break
+                try:
+                    await self.write(f"FIN {msg.id}\n")
+                except ConnectionError as e:
+                    w(f"fin with connection error:{e}")
+                    self.reader.set_exception(e)
 
-            self.rx_queue.task_done()
+                    self._connect_is_broken = True
+                    break
+
+                self.rx_queue.task_done()
+
+                self.rdy -= 1
+                continue
+
+            while len(tasks) <= RDY_SIZE or not self.rx_queue.empty():
+                msg = await self.rx_queue.get()
+
+                task = asyncio.create_task(self._sub_task(self.handler, msg))
+                tasks.append(task)
+
+                self.rx_queue.task_done()
+
+            done, tasks = await asyncio.wait(*tasks, timeout=0.75, return_when=asyncio.FIRST_COMPLETED)
+            d(f"total {len(done)} tasks is done")
 
         self._busy_sub = False
+
+    async def _sub_task(self, handler, msg):
+        try:
+            result = await self.handler(msg)
+        except asyncio.TimeoutError as e:
+            e(f"topic {self.topic}/{self.channel}/{msg.id} handler error:{e}")
+
+            result = False
+
+        try:
+            if result:
+                await self.write(f"FIN {msg.id}\n")
+            else:
+                await self.write(f"REQ {msg.id}\n")
+
+        except ConnectionError as e:
+            w(f"fin/req with connection error")
+            self.reader.set_exception(e)
+
+            self._connect_is_broken = True
+
+        self.rdy -= 1
 
     async def _watchdog(self):
         self._busy_sub = True
@@ -337,6 +391,22 @@ class NSQBasic:
                 await self.send_rdy()
 
         self._busy_watchdog = False
+
+    async def write(self, msg: Union[str, bytes], wait=True):
+        if isinstance(msg, str):
+            self.writer.write(msg.encode())
+        elif isinstance(msg, bytes):
+            self.writer.write(msg)
+        else:
+            raise TypeError("invalid data type")
+
+        await self.writer.drain()
+
+    async def read(self, size=4):
+        raw = await self.reader.readexactly(size)
+        size = int.from_bytes(raw, byteorder="big")
+
+        return await self.reader.readexactly(size)
 
 
 @dataclass
