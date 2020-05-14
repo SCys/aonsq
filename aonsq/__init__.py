@@ -35,7 +35,7 @@ e = logger.error
 PKG_MAGIC = b"  V2"
 RDY_SIZE = 500
 MSG_SIZE = 1024 * 1024  # default is 1Mb
-TSK_OVER = 0.25  # 250ms
+TSK_OVER = 0.15  # unit: second
 
 
 async def public_ip():
@@ -363,7 +363,7 @@ class NSQBasic:
             while len(tasks) <= RDY_SIZE and not self.rx_queue.empty():
                 msg = await self.rx_queue.get()
 
-                task = asyncio.create_task(self._sub_task(self.handler, msg))
+                task = asyncio.create_task(self.async_task(self.handler, msg))
                 tasks.append(task)
 
                 self.rx_queue.task_done()
@@ -372,11 +372,11 @@ class NSQBasic:
             if tasks:
                 done, pending = await asyncio.wait(tasks, timeout=TSK_OVER)
                 tasks = list(pending)
-                d(f"total {len(done)} tasks is done")
+                # d(f"total {len(done)} tasks is done")
 
         self._busy_sub = False
 
-    async def _sub_task(self, handler, msg):
+    async def async_task(self, handler, msg):
         tpCost = datetime.now()
 
         try:
@@ -387,7 +387,7 @@ class NSQBasic:
             result = False
 
         if (datetime.now() - tpCost).total_seconds() > TSK_OVER:  # cost more than task limit
-            w(f"task with msg {msg.id} cost more than {TSK_OVER}s")
+            d(f"task with msg {msg.id} cost more than {TSK_OVER}s")
 
         try:
             if result:
@@ -404,7 +404,7 @@ class NSQBasic:
         self.rdy -= 1
 
         if (datetime.now() - tpCost).total_seconds() > TSK_OVER * 2:  # cost more than task limit *2
-            w(f"task with msg {msg.id} cost more than {TSK_OVER * 2}s")
+            d(f"task with msg {msg.id} cost more than {TSK_OVER * 2}s")
 
     async def _watchdog(self):
         self._busy_sub = True
