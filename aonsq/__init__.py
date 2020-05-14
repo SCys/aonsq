@@ -132,12 +132,12 @@ class NSQBasic:
         return False
 
     async def send_sub(self):
-        writer.write(f"SUB {self.topic} {self.channel}\n".encode())
-        await writer.drain()
+        self.writer.write(f"SUB {self.topic} {self.channel}\n".encode())
+        await self.writer.drain()
 
     async def send_rdy(self):
-        writer.write(f"RDY {self.rdy}\n".encode())
-        await writer.drain()
+        self.writer.write(f"RDY {self.rdy}\n".encode())
+        await self.writer.drain()
 
     async def _tx_worker(self):
         self._busy_tx = True
