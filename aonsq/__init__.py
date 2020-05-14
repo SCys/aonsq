@@ -89,7 +89,7 @@ class NSQBasic:
         self.reader = reader
         self.writer = writer
 
-        self.write(b"  V2")
+        await self.write(b"  V2")
 
         self.is_connect = True
 
@@ -129,8 +129,8 @@ class NSQBasic:
                 "hostname": await public_ip(),
                 "client_id": "".join(random.choice(string.ascii_lowercase) for _ in range(8)),
                 "user_agent": "aonsq.py/0.0.4",
-                # "deflate": True,
-                # "deflate_level": 10,
+                "deflate": True,
+                "deflate_level": 5,
                 "msg_timeout": 30 * 1000,  # 30s
             }
         )
