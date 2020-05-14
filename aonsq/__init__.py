@@ -325,7 +325,7 @@ class NSQBasic:
 
         while self.is_connect:
             if self.rx_queue.empty():
-                await asyncio.sleep(0.75)
+                await asyncio.sleep(TSK_OVER)
                 continue
 
             if self.rdy <= 0:
