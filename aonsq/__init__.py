@@ -386,8 +386,7 @@ class NSQBasic:
 
             result = False
 
-        tpCost = datetime.now() - tpCost
-        if tpCost.total_seconds() > TSK_OVER:  # cost more than task limit
+        if (datetime.now() - tpCost).total_seconds() > TSK_OVER:  # cost more than task limit
             w(f"task with msg {msg.id} cost more than {TSK_OVER}s")
 
         try:
@@ -404,8 +403,7 @@ class NSQBasic:
 
         self.rdy -= 1
 
-        tpCost = datetime.now() - tpCost
-        if tpCost.total_seconds() > TSK_OVER * 2:  # cost more than task limit
+        if (datetime.now() - tpCost).total_seconds() > TSK_OVER * 2:  # cost more than task limit *2
             w(f"task with msg {msg.id} cost more than {TSK_OVER * 2}s")
 
     async def _watchdog(self):
