@@ -227,7 +227,7 @@ class NSQBasic:
                 break
 
             if self.tx_queue.empty():
-                await asyncio.sleep(0.1) # 100ms
+                await asyncio.sleep(0.1)  # 100ms
                 continue
 
             topic, content = await self.tx_queue.get()
@@ -367,7 +367,9 @@ class NSQBasic:
 
                 self.rx_queue.task_done()
 
-            done, tasks = await asyncio.wait(tasks, timeout=0.75, return_when=asyncio.FIRST_COMPLETED)
+            done, pending = await asyncio.wait(tasks, timeout=0.75, return_when=asyncio.FIRST_COMPLETED)
+            tasks = list(pending)
+            
             d(f"total {len(done)} tasks is done")
 
         self._busy_sub = False
