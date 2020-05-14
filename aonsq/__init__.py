@@ -35,7 +35,7 @@ e = logger.error
 PKG_MAGIC = b"  V2"
 RDY_SIZE = 500
 MSG_SIZE = 1024 * 1024  # default is 1Mb
-TSK_OVER = 0.15  # unit: second
+TSK_OVER = 0.05  # unit: second
 
 
 async def public_ip():
