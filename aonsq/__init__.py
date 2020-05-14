@@ -4,7 +4,7 @@ import string
 from asyncio.streams import StreamReader, StreamWriter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Awaitable, Callable, Dict, Optional, Union
+from typing import Any, Awaitable, Callable, Dict, Optional, Union, List
 
 import orjson
 
@@ -150,6 +150,74 @@ class NSQBasic:
     async def send_rdy(self):
         await self.write(f"RDY {self.rdy}\n")
 
+    async def send_pub(self, topic, msg):
+        raw = f"PUB {topic}\n".encode() + len(msg).to_bytes(4, "big") + msg
+        try:
+            await self.write(raw)
+            self.sent += 1
+        except ConnectionError as e:
+            w(f"pub with connection error:{str(e)}")
+            self._connect_is_broken = True
+            return False
+
+        return True
+
+    # async def send_mpub(self, topic, items: List[bytes]):
+    #     pending = []
+    #     prefix = f"MPUB {topic}\n".encode()
+    #     msg_limit = (MSG_SIZE - 8 - len(prefix)) * 0.77 # ~70% MSG_SIZE
+
+    #     _items = []
+    #     for item in items:
+    #         if len(item) >= msg_limit:
+    #             pending.append(item)
+    #         else:
+    #             _items.append(item)
+
+    #     items = _items
+
+    #     for item in items:
+
+    #     # idx = 0
+    #     # items_size = len(items)
+
+    #     # while idx < items_size:
+    #     #     size = 0
+    #     #     raw = f"MPUB {topic}\n".encode()
+    #     #     body = b""
+
+    #     #     while sub_idx < items_size:
+    #     #         item = items[sub_idx]
+    #     #         msg_append = len(item).to_bytes(4, "big") + item
+
+    #     #         sub_idx += 1
+
+    #     #         if len(raw) + 4 + len(msg_append) >= MSG_SIZE:
+    #     #             pending.append(item)
+    #     #             continue
+
+    #     #         if len(raw) + 4 + len(body) + len(msg_append) >= MSG_SIZE:
+    #     #             pending.append(item)
+    #     #             continue
+
+    #     #         body += msg_append
+    #     #         size += 1
+
+    #     #     raw += size.to_bytes(4, "big") + body
+
+    #     #     if size == 0:
+    #     #         break
+
+    #     #     try:
+    #     #         await self.write(raw)
+    #     #         self.sent += size
+    #     #     except ConnectionError as e:
+    #     #         w(f"mpub with connection error:{str(e)}")
+    #     #         self._connect_is_broken = True
+    #     #         break
+
+    #     return pending
+
     async def _tx_worker(self):
         self._busy_tx = True
 
@@ -159,56 +227,12 @@ class NSQBasic:
                 break
 
             if self.tx_queue.empty():
-                await asyncio.sleep(0.1)
+                await asyncio.sleep(0.1) # 100ms
                 continue
 
-            messages = {}
-
-            tx_size = self.tx_queue.qsize()
-            for _ in range(tx_size):
-                topic, content = await self.tx_queue.get()
-
-                if topic in messages:
-                    messages[topic].append(content)
-                else:
-                    messages[topic] = [content]
-
-                self.tx_queue.task_done()
-
-            topics_is_done = []
-            for topic, items in messages.items():
-                raw = ""
-                size = len(items)
-
-                if size == 1:
-                    raw = f"PUB {topic}\n".encode()
-                else:
-                    raw = f"MPUB {topic}\n".encode()
-                    raw += size.to_bytes(4, "big")
-
-                for item in items:
-                    raw += len(item).to_bytes(4, "big") + item
-
-                try:
-                    await self.write(raw)
-                    self.sent += size
-
-                    topics_is_done.append(topic)
-
-                except ConnectionError as exc:
-                    w(f"connection error, recovery the unsent messages:{str(exc)}")
-
-                    # recovery in the tx_queue end
-                    for name, items in messages.items():
-                        if name in topics_is_done:
-                            continue
-
-                        for item in items:
-                            self.tx_queue.put_nowait([name, item])
-
-                    self._connect_is_broken = True
-
-                    break
+            topic, content = await self.tx_queue.get()
+            await self.send_pub(topic, content)
+            self.tx_queue.task_done()
 
         self._busy_tx = False
 
@@ -343,7 +367,7 @@ class NSQBasic:
 
                 self.rx_queue.task_done()
 
-            done, tasks = await asyncio.wait(*tasks, timeout=0.75, return_when=asyncio.FIRST_COMPLETED)
+            done, tasks = await asyncio.wait(tasks, timeout=0.75, return_when=asyncio.FIRST_COMPLETED)
             d(f"total {len(done)} tasks is done")
 
         self._busy_sub = False
