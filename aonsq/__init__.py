@@ -187,7 +187,7 @@ class NSQBasic:
                     raw += size.to_bytes(4, "big")
 
                 for item in items:
-                    raw += len(item).to_bytes(4, "big") + item.encode()
+                    raw += len(item).to_bytes(4, "big") + item
 
                 try:
                     await self.write(raw)
