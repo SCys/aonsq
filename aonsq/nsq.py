@@ -7,6 +7,7 @@ import aiohttp
 import loguru
 
 from .nsq_basic import NSQBasic
+from .nsq_message import NSQMessage
 
 PKG_MAGIC = b"  V2"
 RDY_SIZE = 500
