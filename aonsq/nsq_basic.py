@@ -246,6 +246,10 @@ class NSQBasic:
         tasks = []
 
         while self.is_connect:
+            # break the main loop
+            if self._connect_is_broken:
+                break
+
             if self.rx_queue.empty():
                 await asyncio.sleep(TSK_OVER)
                 continue
