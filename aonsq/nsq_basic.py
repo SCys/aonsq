@@ -6,10 +6,9 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Union
 
-import orjson
-
 import aiohttp
 import loguru
+import orjson
 
 from .nsq_message import NSQMessage
 
