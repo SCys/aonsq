@@ -85,7 +85,7 @@ class NSQBasic:
     _connect_is_broken = False
 
     async def connect(self):
-        reader, writer = await asyncio.open_connection(self.host, self.port)
+        reader, writer = await asyncio.open_connection(self.host, self.port, limit=MSG_SIZE)
 
         self.reader = reader
         self.writer = writer
@@ -93,6 +93,7 @@ class NSQBasic:
         await self.write(b"  V2")
 
         self.is_connect = True
+        self._connect_is_broken = False
 
         # d(f"nsq:{self.host}:{self.port}")
 
@@ -116,6 +117,7 @@ class NSQBasic:
     async def disconnect(self):
         if self.writer is not None:
             self.writer.close()
+            self.reader.set_exception(ConnectionError())
 
             await self.writer.wait_closed()
 
@@ -329,7 +331,7 @@ class NSQBasic:
                 continue
 
             if self.rdy <= 0:
-                # d(f"sub {self.topic} {self.channel} cost {self.cost}")
+                # d(f"sub {self.topic}/{self.channel} cost {self.cost}")
                 self.rdy = RDY_SIZE
 
                 try:
@@ -418,17 +420,28 @@ class NSQBasic:
 
                 d("nsq connection is being reconnected")
 
-                await self.disconnect()
-                await asyncio.sleep(1)
+                while True:
 
-                await self.connect()
+                    try:
+                        await self.disconnect()
+                        await asyncio.sleep(1)
 
-                await self.send_sub()
-                await self.send_rdy()
+                        await self.connect()
+
+                        await self.send_sub()
+                        await self.send_rdy()
+                        break
+                    except ConnectionError as exc:
+                        e(f"nsq reconnect error:{exc}")
+
+                        await asyncio.sleep(1)
 
         self._busy_watchdog = False
 
     async def write(self, msg: Union[str, bytes], wait=True):
+        if self._connect_is_broken:
+            return
+
         if isinstance(msg, str):
             self.writer.write(msg.encode())
         elif isinstance(msg, bytes):
@@ -436,7 +449,10 @@ class NSQBasic:
         else:
             raise TypeError("invalid data type")
 
-        await self.writer.drain()
+        try:
+            await self.writer.drain()
+        except ConnectionError as e:
+            self._connect_is_broken = True
 
     async def read(self, size=4):
         raw = await self.reader.readexactly(size)
