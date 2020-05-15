@@ -155,6 +155,7 @@ class NSQBasic:
             await self.send_pub(topic, content)
             self.tx_queue.task_done()
 
+        logger.debug(f"tx worker is done")
         self._busy_tx = False
 
     async def _rx_worker(self):
@@ -236,6 +237,7 @@ class NSQBasic:
 
             logger.debug(f"frame {size} {frame_type} /{frame_data}/")
 
+        logger.debug(f"rx worker is done")
         self._busy_rx = False
 
     async def _sub_worker(self):
@@ -294,6 +296,7 @@ class NSQBasic:
                 tasks = list(pending)
                 # d(f"total {len(done)} tasks is done")
 
+        logger.debug(f"sub worker is done")
         self._busy_sub = False
 
     async def async_task(self, handler, msg):
@@ -339,7 +342,6 @@ class NSQBasic:
                 logger.debug("nsq connection is being reconnected")
 
                 while True:
-
                     try:
                         await self.disconnect()
                         await asyncio.sleep(1)
