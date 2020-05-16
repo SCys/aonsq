@@ -375,7 +375,9 @@ class NSQBasic:
 
         try:
             await self.writer.drain()
-        except ConnectionError as e:
+        except AssertionError as e:
+            logger.error(f"assert error:{str(e)}")
+        except ConnectionError:
             self._connect_is_broken = True
 
     async def read(self, size=4):
