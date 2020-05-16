@@ -129,11 +129,12 @@ class NSQBasic:
 
     async def send_pub(self, topic, msg):
         raw = f"PUB {topic}\n".encode() + len(msg).to_bytes(4, "big") + msg
+
         try:
             await self.write(raw)
             self.sent += 1
         except ConnectionError as e:
-            logger.warning(f"pub with connection error:{str(e)}")
+            logger.warning(f"topic {topic} pub with connection error:{str(e)}")
             self._connect_is_broken = True
             return False
 
@@ -152,8 +153,11 @@ class NSQBasic:
                 continue
 
             topic, content = await self.tx_queue.get()
-            await self.send_pub(topic, content)
+            result = await self.send_pub(topic, content)
             self.tx_queue.task_done()
+
+            if not result:
+                break
 
         logger.debug(f"tx worker is done")
         self._busy_tx = False
