@@ -31,12 +31,11 @@ class NSQ(NSQBasic):
                 await mq.disconnect()
 
     async def pub(self, topic: str, data: bytes):
-        if not self.is_connect:
-            logger.warning("connection invalid status")
-            return False
+        # if not self.is_connect:
+        #     logger.warning("connection invalid status")
+        #     return False
 
         await self.tx_queue.put((topic, data))
-        # d(f"pub {topic} {self.tx_queue.qsize()}")
         return True
 
     async def sub(self, topic: str, channel: str, handler: Callable[[NSQMessage], Awaitable[bool]]):

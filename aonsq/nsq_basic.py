@@ -72,7 +72,7 @@ class NSQBasic:
             logger.warning("send identify error")
             self.is_connect = False
             return
-            
+
         self.is_connect = True
         self._connect_is_broken = False
 
@@ -91,8 +91,8 @@ class NSQBasic:
     async def disconnect(self):
         if self.writer is not None:
             self.writer.close()
-            self.reader.set_exception(ConnectionError())
 
+            await self.writer.drain()
             await self.writer.wait_closed()
 
             self.writer = None
