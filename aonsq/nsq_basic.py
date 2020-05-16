@@ -260,9 +260,9 @@ class NSQBasic:
 
                 try:
                     await self.write(f"RDY {self.rdy}\n")
-                except ConnectionError as e:
-                    logger.error(f"rdy with connection error:{e}")
-                    self.reader.set_exception(e)
+                except ConnectionError as exc:
+                    logger.error(f"topic {self.topic}/{self.channel} rdy with connection error:{str(exc)")
+                    self.reader.set_exception(exc)
 
                     self._connect_is_broken = True
                     break
@@ -274,9 +274,10 @@ class NSQBasic:
 
                 try:
                     await self.write(f"FIN {msg.id}\n")
-                except ConnectionError as e:
-                    logger.error(f"fin with connection error:{e}")
-                    self.reader.set_exception(e)
+                except ConnectionError as exc:
+                    logger.error(f"topic {self.topic}/{self.channel} fin with connection error:{str(exc)}")
+
+                    self.reader.set_exception(exc)
 
                     self._connect_is_broken = True
                     break
@@ -309,7 +310,7 @@ class NSQBasic:
         try:
             result = await self.handler(msg)
         except asyncio.TimeoutError as e:
-            e(f"topic {self.topic}/{self.channel}/{msg.id} handler error:{e}")
+            logger.error(f"topic {self.topic}/{self.channel} handler error:{e}")
 
             result = False
 
@@ -323,7 +324,7 @@ class NSQBasic:
                 await self.write(f"REQ {msg.id}\n")
 
         except ConnectionError as e:
-            logger.warning(f"fin/req with connection error")
+            logger.warning(f"topic {self.topic}/{self.channel} fin/req with connection error")
             self.reader.set_exception(e)
 
             self._connect_is_broken = True
@@ -343,7 +344,7 @@ class NSQBasic:
             if self._connect_is_broken:
                 await asyncio.sleep(5)
 
-                logger.debug("nsq connection is being reconnected")
+                logger.debug(f"topic {self.topic}/{self.channel} will be reconnected")
 
                 while True:
                     try:
@@ -356,7 +357,7 @@ class NSQBasic:
                         await self.send_rdy()
                         break
                     except ConnectionError as exc:
-                        logger.error(f"nsq reconnect error:{exc}")
+                        logger.debug(f"topic {self.topic}/{self.channel} reconnect eror:{str(exc)}")
 
                         await asyncio.sleep(1)
 
@@ -376,10 +377,13 @@ class NSQBasic:
         try:
             await self.writer.drain()
         except AssertionError as e:
-            logger.error(f"assert error:{str(e)}")
+            logger.error(f"topic {self.topic}/{self.channel} assert error")
+
             if not self._connect_is_broken:
                 self._connect_is_broken = True
         except ConnectionError:
+            logger.error(f"topic {self.topic}/{self.channel} connection error")
+
             self._connect_is_broken = True
 
     async def read(self, size=4):
