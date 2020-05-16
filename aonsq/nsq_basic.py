@@ -216,18 +216,24 @@ class NSQBasic:
 
             elif frame_type == 1:  # error
                 err_msg: str = frame_data.decode()
-                logger.warning(f"logic error:{err_msg}")
+                logger.warning(f"topic {self.topic} logic error:{err_msg}")
 
                 # clear the rx_queue
                 if err_msg.startswith("E_FIN_FAILED"):
 
+                    messages = []
                     while not self.rx_queue.empty():
                         msg = await self.rx_queue.get()
-                        await self.write(f"REQ {msg.id}\n")
+                        messages.append(msg.id)
                         self.rx_queue.task_done()
+
+                    for msg in messages:
+                        await self.write(f"REQ {msg.id}\n")
 
                     # reset the rdy
                     self.rdy = 0
+
+                    logger.debug(f"topic {self.topic} rx queue is reset")
 
                 continue
 
