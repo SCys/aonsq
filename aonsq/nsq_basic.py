@@ -261,7 +261,7 @@ class NSQBasic:
                 try:
                     await self.write(f"RDY {self.rdy}\n")
                 except ConnectionError as exc:
-                    logger.error(f"topic {self.topic}/{self.channel} rdy with connection error:{str(exc)")
+                    logger.error(f"topic {self.topic}/{self.channel} rdy with connection error:{str(exc)}")
                     self.reader.set_exception(exc)
 
                     self._connect_is_broken = True
