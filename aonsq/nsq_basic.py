@@ -215,10 +215,21 @@ class NSQBasic:
                 continue
 
             elif frame_type == 1:  # error
-                logger.warning(f"error response:{frame_data.decode()}")
+                err_msg: str = frame_data.decode()
+                logger.warning(f"logic error:{err_msg}")
 
-                self._connect_is_broken = True
-                break
+                # clear the rx_queue
+                if err_msg.startswith("E_FIN_FAILED"):
+
+                    while not self.rx_queue.empty():
+                        msg = await self.rx_queue.get()
+                        await self.write(f"REQ {msg.id}\n")
+                        self.rx_queue.task_done()
+
+                    # reset the rdy
+                    self.rdy = 0
+
+                continue
 
             elif frame_type == 2:  # message
                 # msg_raw = zlib.decompress(frame_data)
@@ -254,10 +265,6 @@ class NSQBasic:
             if self._connect_is_broken:
                 break
 
-            if self.rx_queue.empty():
-                await asyncio.sleep(TSK_OVER)
-                continue
-
             if self.rdy <= 0:
                 # d(f"sub {self.topic}/{self.channel} cost {self.cost}")
                 self.rdy = RDY_SIZE
@@ -271,6 +278,10 @@ class NSQBasic:
                     self._connect_is_broken = True
                     break
 
+                continue
+
+            if self.rx_queue.empty():
+                await asyncio.sleep(TSK_OVER)
                 continue
 
             if self.handler is None:
@@ -361,7 +372,7 @@ class NSQBasic:
                         await self.send_rdy()
                         break
                     except ConnectionError as exc:
-                        logger.error(f"topic {self.topic}/{self.channel} reconnect eror:{str(exc)}")
+                        logger.error(f"topic {self.topic}/{self.channel} reconnect error:{str(exc)}")
 
                         await asyncio.sleep(1)
 
