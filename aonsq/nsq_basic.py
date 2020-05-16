@@ -66,15 +66,15 @@ class NSQBasic:
 
         await self.write(b"  V2")
 
-        self.is_connect = True
-        self._connect_is_broken = False
-
         # d(f"nsq:{self.host}:{self.port}")
 
         if not await self.send_identify():
             logger.warning("send identify error")
             self.is_connect = False
             return
+            
+        self.is_connect = True
+        self._connect_is_broken = False
 
         if not self._busy_tx:
             asyncio.create_task(self._tx_worker())
@@ -106,8 +106,8 @@ class NSQBasic:
                 "hostname": await public_ip(),
                 "client_id": "".join(random.choice(string.ascii_lowercase) for _ in range(8)),
                 "user_agent": "aonsq.py/0.0.4",
-                "deflate": True,
-                "deflate_level": 5,
+                # "deflate": True,
+                # "deflate_level": 5,
                 "msg_timeout": 30 * 1000,  # 30s
             }
         )
@@ -349,7 +349,7 @@ class NSQBasic:
                 while True:
                     try:
                         await self.disconnect()
-                        await asyncio.sleep(1)
+                        await asyncio.sleep(2)
 
                         await self.connect()
 
@@ -357,7 +357,7 @@ class NSQBasic:
                         await self.send_rdy()
                         break
                     except ConnectionError as exc:
-                        logger.debug(f"topic {self.topic}/{self.channel} reconnect eror:{str(exc)}")
+                        logger.error(f"topic {self.topic}/{self.channel} reconnect eror:{str(exc)}")
 
                         await asyncio.sleep(1)
 
