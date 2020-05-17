@@ -117,6 +117,9 @@ class NSQInterface:
     async def disconnect(self):
         # cancel the tasks
         for name, task in self.tasks.items():
+            if name == "watchdog":  # FIXME how to close watchdog task?
+                continue
+
             if task is None:
                 continue
 
