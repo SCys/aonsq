@@ -50,7 +50,7 @@ class NSQBasic:
     cost: int = 0
     rdy: int = RDY_SIZE
 
-    tasks: Dict[str, asyncio.Task] = field(default=dict)
+    tasks: Dict[str, asyncio.Task] = field(default_factory=dict)
 
     _connect_is_broken = False
 
