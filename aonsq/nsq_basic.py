@@ -1,6 +1,7 @@
 import asyncio
 import random
 import string
+import traceback
 from asyncio.streams import StreamReader, StreamWriter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -90,14 +91,15 @@ class NSQBasic:
 
     async def disconnect(self):
         if self.writer is not None:
-            self.writer.close()
             self.reader.set_exception(ConnectionAbortedError())
+            self.writer.close()
 
             await self.writer.drain()
             await self.writer.wait_closed()
 
             self.writer = None
             self.reader = None
+
             logger.info(f"connection is closed")
 
         self.is_connect = False
@@ -339,7 +341,8 @@ class NSQBasic:
             # wait for other worker is closed
             await asyncio.sleep(5)
 
-            logger.debug(f"topic {self.topic}/{self.channel} will be reconnected")
+            if self.topic and self.channel:
+                logger.debug(f"topic {self.topic}/{self.channel} will be reconnected")
 
             while True:
                 try:
@@ -353,8 +356,11 @@ class NSQBasic:
                         await self.send_rdy()
 
                     break
-                except ConnectionError as exc:
-                    logger.error(f"topic {self.topic}/{self.channel} reconnect error:{str(exc)}")
+                except ConnectionError:
+                    if self.topic and self.channel:
+                        logger.exception(f"topic {self.topic}/{self.channel} reconnect error")
+                    else:
+                        logger.exception(f"topic reconnect error")
 
                     await asyncio.sleep(1)
 
