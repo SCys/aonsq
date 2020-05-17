@@ -43,8 +43,8 @@ class NSQBasic:
     is_connect = False
 
     # sub options
-    rx_queue: asyncio.Queue = field(default_factory=lambda: asyncio.Queue(maxsize=RDY_SIZE * 2))
-    tx_queue: asyncio.Queue = field(default_factory=lambda: asyncio.Queue(maxsize=RDY_SIZE * 5))
+    rx_queue: asyncio.Queue = field(default_factory=lambda: asyncio.Queue(maxsize=RDY_SIZE * 20))
+    tx_queue: asyncio.Queue = field(default_factory=lambda: asyncio.Queue(maxsize=RDY_SIZE * 50))
     handler: Optional[Callable[[Any], Awaitable[bool]]] = None
 
     sent: int = 0
@@ -54,6 +54,14 @@ class NSQBasic:
     tasks: Dict[str, asyncio.Task] = field(default_factory=dict)
 
     _connect_is_broken = False
+
+    async def pub(self, topic: str, data: bytes):
+        try:
+            await self.tx_queue.put((topic, data))
+        except asyncio.QueueFull:
+            return False
+
+        return True
 
     async def connect(self):
         reader, writer = await asyncio.open_connection(self.host, self.port, limit=MSG_SIZE)

@@ -22,21 +22,13 @@ logger = loguru.logger
 class NSQ(NSQBasic):
     sub_mq: Dict[str, Dict[str, NSQBasic]] = field(default_factory=dict)
 
-    async def disconnect(self):
-        await super().disconnect()
+    async def close(self):
+        await self.disconnect()
 
         for topic, channels in self.sub_mq.items():
             for channel, mq in channels.items():
                 logger.debug(f"closing topic {topic} channel {channel}")
                 await mq.disconnect()
-
-    async def pub(self, topic: str, data: bytes):
-        # if not self.is_connect:
-        #     logger.warning("connection invalid status")
-        #     return False
-
-        await self.tx_queue.put((topic, data))
-        return True
 
     async def sub(self, topic: str, channel: str, handler: Callable[[NSQMessage], Awaitable[bool]]):
         if topic not in self.sub_mq:
