@@ -116,14 +116,16 @@ class NSQBasic:
             await self.writer.wait_closed()
 
             self.writer = None
-            self.reader = None
 
             logger.info(f"connection is closed")
 
-        try:
-            self.reader.set_exception(ConnectionAbortedError())
-        except:
-            pass
+        if self.reader is not None:
+            try:
+                self.reader.set_exception(ConnectionAbortedError())
+            except:
+                pass
+
+            self.reader = None
 
         self.is_connect = False
 
@@ -402,7 +404,14 @@ class NSQBasic:
             if self.topic and self.channel:
                 logger.debug(f"topic {self.topic}/{self.channel} will be reconnected")
 
-            await self.disconnect()
+            try:
+                await self.disconnect()
+            except:
+                if self.topic and self.channel:
+                    logger.exception(f"topic {self.topic}/{self.channel} disconnect error")
+                else:
+                    logger.exception(f"topic disconnect error")
+
             await asyncio.sleep(2)
 
             while True:
