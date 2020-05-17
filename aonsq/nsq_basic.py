@@ -130,12 +130,8 @@ class NSQBasic:
     async def send_pub(self, topic, msg):
         raw = f"PUB {topic}\n".encode() + len(msg).to_bytes(4, "big") + msg
 
-        try:
-            await self.write(raw)
+        if await self.write(raw):
             self.sent += 1
-        except ConnectionError as e:
-            logger.warning(f"topic {topic} pub with connection error:{str(e)}")
-            self._connect_is_broken = True
             return False
 
         return True
@@ -275,16 +271,8 @@ class NSQBasic:
                 if self.topic and self.channel:
                     logger.debug(f"sub {self.topic}/{self.channel} cost:{self.cost}")
 
-                self.rdy = RDY_SIZE
-
-                try:
-                    await self.write(f"RDY {self.rdy}\n")
-                except ConnectionError as exc:
-                    logger.error(f"topic {self.topic}/{self.channel} rdy with connection error:{str(exc)}")
-                    self.reader.set_exception(exc)
-
-                    self._connect_is_broken = True
-                    break
+                if await self.write(f"RDY {RDY_SIZE}\n"):
+                    self.rdy = RDY_SIZE
 
                 continue
 
@@ -295,19 +283,10 @@ class NSQBasic:
             if self.handler is None:
                 msg = await self.rx_queue.get()
 
-                try:
-                    await self.write(f"FIN {msg.id}\n")
-                except ConnectionError as exc:
-                    logger.error(f"topic {self.topic}/{self.channel} fin with connection error:{str(exc)}")
-
-                    self.reader.set_exception(exc)
-
-                    self._connect_is_broken = True
-                    break
-
-                self.rx_queue.task_done()
+                await self.write(f"FIN {msg.id}\n")
 
                 self.rdy -= 1
+                self.rx_queue.task_done()
                 continue
 
             while len(tasks) <= RDY_SIZE and not self.rx_queue.empty():
@@ -388,9 +367,9 @@ class NSQBasic:
 
         self._busy_watchdog = False
 
-    async def write(self, msg: Union[str, bytes], wait=True):
+    async def write(self, msg: Union[str, bytes], wait=True) -> bool:
         if self._connect_is_broken:
-            return
+            return False
 
         if isinstance(msg, str):
             self.writer.write(msg.encode())
@@ -406,10 +385,15 @@ class NSQBasic:
 
             if not self._connect_is_broken:
                 self._connect_is_broken = True
+
+            return False
         except ConnectionError:
             logger.error(f"topic {self.topic}/{self.channel} connection error")
 
             self._connect_is_broken = True
+            return False
+
+        return True
 
     async def read(self, size=4):
         raw = await self.reader.readexactly(size)
