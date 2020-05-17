@@ -112,17 +112,19 @@ class NSQBasic:
         if self.writer is not None:
             self.writer.close()
 
-            await self.writer.drain()
-            await self.writer.wait_closed()
+            try:  # ignore the connection error
+                await self.writer.wait_closed()
+            except ConnectionError:
+                pass
 
             self.writer = None
 
             logger.info(f"connection is closed")
 
         if self.reader is not None:
-            try:
+            try:  # ignore the connection error
                 self.reader.set_exception(ConnectionAbortedError())
-            except:
+            except ConnectionError:
                 pass
 
             self.reader = None
