@@ -2,9 +2,7 @@ import asyncio
 from dataclasses import dataclass, field
 from typing import Awaitable, Callable, Dict
 
-import aiohttp
 import loguru
-import orjson
 
 from .nsq_basic import NSQBasic
 from .nsq_message import NSQMessage
