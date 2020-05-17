@@ -272,7 +272,9 @@ class NSQBasic:
                 break
 
             if self.rdy <= 0:
-                # d(f"sub {self.topic}/{self.channel} cost {self.cost}")
+                if self.topic and self.channel:
+                    logger.debug(f"sub {self.topic}/{self.channel} sent {self.sent}")
+
                 self.rdy = RDY_SIZE
 
                 try:
