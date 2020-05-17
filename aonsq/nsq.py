@@ -55,4 +55,6 @@ class NSQ(NSQBasic):
 
         self.sub_mq[topic][channel] = cli
 
+        logger.debug(f"nsq {self.host}:{self.port} is sub topic {topic}/{channel}")
+
         return cli
