@@ -219,7 +219,7 @@ class NSQBasic(NSQInterface):
                     else:
                         logger.debug(f"will be reconnected")
 
-                    break
+                    break  # once
 
                 except ConnectionAbortedError:
                     if self.topic and self.channel:
