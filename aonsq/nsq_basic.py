@@ -91,6 +91,7 @@ class NSQBasic:
     async def disconnect(self):
         if self.writer is not None:
             self.writer.close()
+            self.reader.set_exception(ConnectionAbortedError())
 
             await self.writer.drain()
             await self.writer.wait_closed()
@@ -115,6 +116,11 @@ class NSQBasic:
         await self.write(f"IDENTIFY\n".encode() + len(info).to_bytes(4, "big") + info)
 
         resp = await self.read()
+
+        # error/exception
+        if resp is None:
+            return False
+
         if resp[4:] == b"OK":
             return True
 
@@ -166,32 +172,9 @@ class NSQBasic:
             if self._connect_is_broken:
                 break
 
-            try:
-                raw = await self.reader.readexactly(4)
-            except ConnectionError as exc:
-                logger.error(f"read head connection error:{str(exc)}")
-
-                self._connect_is_broken = True
+            resp = await self.read()
+            if resp is None:
                 break
-
-            except asyncio.streams.IncompleteReadError as exc:
-                logger.error(f"steam incomplete read error:{str(exc)}")
-
-                self._connect_is_broken = True
-                break
-
-            size = int.from_bytes(raw, byteorder="big")
-            if MSG_SIZE < size or size < 6:
-                logger.warning(f"invalid size:{size} {raw}")
-                continue
-
-            try:
-                resp = await self.reader.readexactly(size)
-            except ConnectionError as exc:
-                logger.error(f"read content connection error:{str(exc)}")
-
-                self._connect_is_broken = True
-                continue
 
             frame_type = int.from_bytes(resp[:4], byteorder="big")
             frame_data = resp[4:]
@@ -248,11 +231,11 @@ class NSQBasic:
                 self.cost += 1
 
                 if len(msg.id) < 16:
-                    logger.debug(f"frame {size} {frame_type} /{frame_data}/")
+                    logger.debug(f"frame {frame_type} /{frame_data}/")
 
                 continue
 
-            logger.debug(f"frame {size} {frame_type} /{frame_data}/")
+            logger.debug(f"frame {frame_type} /{frame_data}/")
 
         logger.debug(f"rx worker is done")
         self._busy_rx = False
@@ -327,7 +310,6 @@ class NSQBasic:
 
         except ConnectionError as e:
             logger.warning(f"topic {self.topic}/{self.channel} fin/req with connection error")
-            self.reader.set_exception(e)
 
             self._connect_is_broken = True
 
@@ -343,27 +325,30 @@ class NSQBasic:
         while self.is_connect:
             await asyncio.sleep(1)
 
-            if self._connect_is_broken:
-                await asyncio.sleep(5)
+            if not self._connect_is_broken:
+                continue
 
-                logger.debug(f"topic {self.topic}/{self.channel} will be reconnected")
+            # wait for other worker is closed
+            await asyncio.sleep(5)
 
-                while True:
-                    try:
-                        await self.disconnect()
-                        await asyncio.sleep(2)
+            logger.debug(f"topic {self.topic}/{self.channel} will be reconnected")
 
-                        await self.connect()
+            while True:
+                try:
+                    await self.disconnect()
+                    await asyncio.sleep(2)
 
-                        if self.topic and self.channel:
-                            await self.send_sub()
-                            await self.send_rdy()
+                    await self.connect()
 
-                        break
-                    except ConnectionError as exc:
-                        logger.error(f"topic {self.topic}/{self.channel} reconnect error:{str(exc)}")
+                    if self.topic and self.channel:
+                        await self.send_sub()
+                        await self.send_rdy()
 
-                        await asyncio.sleep(1)
+                    break
+                except ConnectionError as exc:
+                    logger.error(f"topic {self.topic}/{self.channel} reconnect error:{str(exc)}")
+
+                    await asyncio.sleep(1)
 
         self._busy_watchdog = False
 
@@ -395,8 +380,23 @@ class NSQBasic:
 
         return True
 
-    async def read(self, size=4):
-        raw = await self.reader.readexactly(size)
-        size = int.from_bytes(raw, byteorder="big")
+    async def read(self, size=4) -> Optional[bytes]:
+        try:
+            raw = await self.reader.readexactly(size)
+            size = int.from_bytes(raw, byteorder="big")
 
-        return await self.reader.readexactly(size)
+            return await self.reader.readexactly(size)
+
+        except ConnectionError as exc:
+            if not self._connect_is_broken:
+                self._connect_is_broken = True
+                logger.error(f"read error:{str(exc)}")
+
+            return None
+
+        except asyncio.streams.IncompleteReadError as exc:
+            if not self._connect_is_broken:
+                self._connect_is_broken = True
+                logger.error(f"stream error:{str(exc)}")
+
+            return None
