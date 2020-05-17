@@ -209,13 +209,7 @@ class NSQBasic(NSQInterface):
             # wait for other worker is closed
             await asyncio.sleep(5)
 
-            try:
-                await self.disconnect()
-            except:
-                if self.topic and self.channel:
-                    logger.exception(f"topic {self.topic}/{self.channel} disconnect error")
-                else:
-                    logger.exception(f"topic disconnect error")
+            await self.disconnect()
 
             while True:
                 try:
