@@ -207,8 +207,8 @@ class NSQBasic:
                         messages.append(msg.id)
                         self.rx_queue.task_done()
 
-                    for msg in messages:
-                        await self.write(f"REQ {msg.id}\n")
+                    for msg_id in messages:
+                        await self.write(f"REQ {msg_id}\n")
 
                     # reset the rdy
                     self.rdy = 0
