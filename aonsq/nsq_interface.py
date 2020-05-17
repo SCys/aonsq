@@ -131,7 +131,7 @@ class NSQInterface:
 
             self.writer = None
 
-            logger.info(f"connection is closed")
+            logger.debug(f"connection writer is closed")
 
         if self.reader is not None:
             try:  # ignore the connection error
@@ -140,6 +140,8 @@ class NSQInterface:
                 pass
 
             self.reader = None
+
+            logger.debug(f"connection reader is reset")
 
         self.is_connect = False
 
@@ -157,7 +159,7 @@ class NSQInterface:
         try:
             await self.writer.drain()
         except AssertionError as e:
-            logger.error("writer assert error")
+            logger.exception("writer assert error")
 
             if not self._connect_is_broken:
                 self._connect_is_broken = True
@@ -191,6 +193,7 @@ class NSQInterface:
         except asyncio.streams.IncompleteReadError as exc:
             if not self._connect_is_broken:
                 self._connect_is_broken = True
-                logger.error(f"stream error:{str(exc)}")
+
+                logger.exception("stream error")
 
             return None
