@@ -93,8 +93,6 @@ class NSQInterface:
 
         await self.write(b"  V2")
 
-        # d(f"nsq:{self.host}:{self.port}")
-
         if not await self.send_identify():
             logger.warning("send identify error")
             self.is_connect = False
@@ -113,7 +111,7 @@ class NSQInterface:
         # for name, task in self.tasks.items():
         #     task.add_done_callback(functools.partial(logger.debug, f"task {name} is done"))
 
-        logger.debug("nsq is connected")
+        logger.debug(f"nsq {self.host}:{self.port} is connected")
 
     async def disconnect(self):
         # cancel the tasks
