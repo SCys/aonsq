@@ -52,10 +52,7 @@ class NSQBasic:
 
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
-    _busy_tx = False
-    _busy_rx = False
-    _busy_sub = False
-    _busy_watchdog = False
+    _tasks: Dict[str, asyncio.Task] = field(default=dict)
 
     _connect_is_broken = False
 
@@ -77,19 +74,28 @@ class NSQBasic:
         self.is_connect = True
         self._connect_is_broken = False
 
-        if not self._busy_tx:
-            asyncio.create_task(self._tx_worker())
-
-        if not self._busy_rx:
-            asyncio.create_task(self._rx_worker())
-
-        if not self._busy_sub:
-            asyncio.create_task(self._sub_worker())
-
-        if not self._busy_watchdog:
-            asyncio.create_task(self._watchdog())
+        self.tasks["tx"] = asyncio.create_task(self._tx_worker())
+        self.tasks["rx"] = asyncio.create_task(self._rx_worker())
+        self.tasks["sub"] = asyncio.create_task(self._sub_worker())
+        self.tasks["watchdog"] = asyncio.create_task(self._watchdog())
 
     async def disconnect(self):
+        # cancel the tasks
+        for name, task in self._tasks.items():
+            if task is None:
+                continue
+
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                logger.exception(f"task {name} cancel error")
+            else:
+                logger.info(f"task {name} is canceled")
+
+        # reset
+        self._tasks.clear()
+
         if self.writer is not None:
             self.reader.set_exception(ConnectionAbortedError())
             self.writer.close()
@@ -145,9 +151,85 @@ class NSQBasic:
 
         return True
 
-    async def _tx_worker(self):
-        self._busy_tx = True
+    async def async_task(self, handler, msg):
+        # tpCost = datetime.now()
 
+        try:
+            result = await self.handler(msg)
+        except asyncio.TimeoutError as e:
+            logger.error(f"topic {self.topic}/{self.channel} handler error:{e}")
+
+            result = False
+
+        # if (datetime.now() - tpCost).total_seconds() > TSK_OVER:  # cost more than task limit
+        #     logger.debug(f"task with msg {msg.id} cost more than {TSK_OVER}s")
+
+        try:
+            if result:
+                await self.write(f"FIN {msg.id}\n")
+            else:
+                await self.write(f"REQ {msg.id}\n")
+
+        except ConnectionError as e:
+            logger.warning(f"topic {self.topic}/{self.channel} fin/req with connection error")
+
+            self._connect_is_broken = True
+
+        self.rdy -= 1
+
+        # if (datetime.now() - tpCost).total_seconds() > TSK_OVER * 2:  # cost more than task limit *2
+        #     logger.debug(f"task with msg {msg.id} cost more than {TSK_OVER * 2}s")
+
+    async def write(self, msg: Union[str, bytes], wait=True) -> bool:
+        if self._connect_is_broken:
+            return False
+
+        if isinstance(msg, str):
+            self.writer.write(msg.encode())
+        elif isinstance(msg, bytes):
+            self.writer.write(msg)
+        else:
+            raise TypeError("invalid data type")
+
+        try:
+            await self.writer.drain()
+        except AssertionError as e:
+            logger.error(f"topic assert error")
+
+            if not self._connect_is_broken:
+                self._connect_is_broken = True
+
+            return False
+        except ConnectionError:
+            logger.error(f"topic {self.topic}/{self.channel} connection error")
+
+            self._connect_is_broken = True
+            return False
+
+        return True
+
+    async def read(self, size=4) -> Optional[bytes]:
+        try:
+            raw = await self.reader.readexactly(size)
+            size = int.from_bytes(raw, byteorder="big")
+
+            return await self.reader.readexactly(size)
+
+        except ConnectionError as exc:
+            if not self._connect_is_broken:
+                self._connect_is_broken = True
+                logger.error(f"read error:{str(exc)}")
+
+            return None
+
+        except asyncio.streams.IncompleteReadError as exc:
+            if not self._connect_is_broken:
+                self._connect_is_broken = True
+                logger.error(f"stream error:{str(exc)}")
+
+            return None
+
+    async def _tx_worker(self):
         while self.is_connect:
             # break the main loop
             if self._connect_is_broken:
@@ -166,10 +248,7 @@ class NSQBasic:
         else:
             logger.debug(f"tx worker is done")
 
-        self._busy_tx = False
-
     async def _rx_worker(self):
-        self._busy_rx = True
 
         while self.is_connect:
             # break the main loop
@@ -246,11 +325,8 @@ class NSQBasic:
             logger.debug(f"frame {frame_type} /{frame_data}/")
 
         logger.debug(f"rx worker is done")
-        self._busy_rx = False
 
     async def _sub_worker(self):
-        self._busy_sub = True
-
         tasks = []
 
         while self.is_connect:
@@ -297,40 +373,8 @@ class NSQBasic:
                 # d(f"total {len(done)} tasks is done")
 
         logger.debug(f"sub worker is done")
-        self._busy_sub = False
-
-    async def async_task(self, handler, msg):
-        # tpCost = datetime.now()
-
-        try:
-            result = await self.handler(msg)
-        except asyncio.TimeoutError as e:
-            logger.error(f"topic {self.topic}/{self.channel} handler error:{e}")
-
-            result = False
-
-        # if (datetime.now() - tpCost).total_seconds() > TSK_OVER:  # cost more than task limit
-        #     logger.debug(f"task with msg {msg.id} cost more than {TSK_OVER}s")
-
-        try:
-            if result:
-                await self.write(f"FIN {msg.id}\n")
-            else:
-                await self.write(f"REQ {msg.id}\n")
-
-        except ConnectionError as e:
-            logger.warning(f"topic {self.topic}/{self.channel} fin/req with connection error")
-
-            self._connect_is_broken = True
-
-        self.rdy -= 1
-
-        # if (datetime.now() - tpCost).total_seconds() > TSK_OVER * 2:  # cost more than task limit *2
-        #     logger.debug(f"task with msg {msg.id} cost more than {TSK_OVER * 2}s")
 
     async def _watchdog(self):
-        self._busy_sub = True
-
         # stauts is recover or normal
         while self.is_connect:
             await asyncio.sleep(1)
@@ -363,54 +407,3 @@ class NSQBasic:
                         logger.exception(f"topic reconnect error")
 
                     await asyncio.sleep(1)
-
-        self._busy_watchdog = False
-
-    async def write(self, msg: Union[str, bytes], wait=True) -> bool:
-        if self._connect_is_broken:
-            return False
-
-        if isinstance(msg, str):
-            self.writer.write(msg.encode())
-        elif isinstance(msg, bytes):
-            self.writer.write(msg)
-        else:
-            raise TypeError("invalid data type")
-
-        try:
-            await self.writer.drain()
-        except AssertionError as e:
-            logger.error(f"topic assert error")
-
-            if not self._connect_is_broken:
-                self._connect_is_broken = True
-
-            return False
-        except ConnectionError:
-            logger.error(f"topic {self.topic}/{self.channel} connection error")
-
-            self._connect_is_broken = True
-            return False
-
-        return True
-
-    async def read(self, size=4) -> Optional[bytes]:
-        try:
-            raw = await self.reader.readexactly(size)
-            size = int.from_bytes(raw, byteorder="big")
-
-            return await self.reader.readexactly(size)
-
-        except ConnectionError as exc:
-            if not self._connect_is_broken:
-                self._connect_is_broken = True
-                logger.error(f"read error:{str(exc)}")
-
-            return None
-
-        except asyncio.streams.IncompleteReadError as exc:
-            if not self._connect_is_broken:
-                self._connect_is_broken = True
-                logger.error(f"stream error:{str(exc)}")
-
-            return None
