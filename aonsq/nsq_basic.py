@@ -204,8 +204,6 @@ class NSQBasic(NSQInterface):
                 else:
                     logger.exception(f"topic disconnect error")
 
-            await asyncio.sleep(2)
-
             while True:
                 try:
                     await self.connect()
