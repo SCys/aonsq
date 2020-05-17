@@ -25,10 +25,22 @@ class NSQ(NSQBasic):
     async def close(self):
         await self.disconnect()
 
+        task = self.tasks["watchdog"]
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
         for topic, channels in self.sub_mq.items():
             for channel, mq in channels.items():
                 logger.debug(f"closing topic {topic} channel {channel}")
                 await mq.disconnect()
+
+                task = mq.tasks["watchdog"]
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
 
     async def pub(self, topic: str, data: bytes):
         try:
