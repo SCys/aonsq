@@ -81,7 +81,7 @@ class NSQInterface:
         reader = None
         for i in range(3):
             try:
-                reader, writer = await asyncio.wait_for(_async_connect, timeout=5.0)
+                reader, writer = await asyncio.wait_for(_async_connect(), timeout=5.0)
                 break
             except TimeoutError:
                 continue
