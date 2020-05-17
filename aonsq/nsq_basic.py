@@ -238,7 +238,7 @@ class NSQBasic:
             return None
 
     async def _tx_worker(self):
-        logger.debug("tx worker is running")
+        # logger.debug("tx worker is running")
 
         while self.is_connect:
             # break the main loop
@@ -254,7 +254,7 @@ class NSQBasic:
             self.tx_queue.task_done()
 
     async def _rx_worker(self):
-        logger.debug("rx worker is running")
+        # logger.debug("rx worker is running")
 
         while self.is_connect:
             # break the main loop
@@ -331,7 +331,7 @@ class NSQBasic:
             logger.debug(f"frame {frame_type} /{frame_data}/")
 
     async def _sub_worker(self):
-        logger.debug("sub worker is running")
+        # logger.debug("sub worker is running")
 
         tasks = []
 
@@ -379,7 +379,7 @@ class NSQBasic:
                 # d(f"total {len(done)} tasks is done")
 
     async def _watchdog(self):
-        logger.debug("watchdog is running")
+        # logger.debug("watchdog is running")
 
         # stauts is recover or normal
         while self.is_connect:
