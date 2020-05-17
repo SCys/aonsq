@@ -81,7 +81,12 @@ class NSQBasic:
         self.tasks["watchdog"] = loop.create_task(self._watchdog())
 
         for name, task in self.tasks.items():
-            task.add_done_callback(functools.partial(logger.debug, f"task {name} is none"))
+            if self.topic and self.channel:
+                func = functools.partial(logger.debug, f"topic {self.topic}/{self.channel} task {name} is none")
+            else:
+                func = functools.partial(logger.debug, f"task {name} is none")
+
+            task.add_done_callback(func)
 
     async def disconnect(self):
         # cancel the tasks
@@ -381,7 +386,6 @@ class NSQBasic:
     async def _watchdog(self):
         # logger.debug("watchdog is running")
 
-        # stauts is recover or normal
         while self.is_connect:
             await asyncio.sleep(1)
 
