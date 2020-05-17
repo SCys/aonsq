@@ -34,7 +34,7 @@ class NSQBasic:
 
     topic: str = ""
     channel: str = ""
-    stats: Dict[str, int] = field(default_factory=dict)
+    # stats: Dict[str, int] = field(default_factory=dict)
 
     reader: Optional[StreamReader] = None
     writer: Optional[StreamWriter] = None
@@ -50,9 +50,7 @@ class NSQBasic:
     cost: int = 0
     rdy: int = RDY_SIZE
 
-    _lock: asyncio.Lock = field(default_factory=asyncio.Lock)
-
-    _tasks: Dict[str, asyncio.Task] = field(default=dict)
+    tasks: Dict[str, asyncio.Task] = field(default=dict)
 
     _connect_is_broken = False
 
@@ -83,7 +81,7 @@ class NSQBasic:
 
     async def disconnect(self):
         # cancel the tasks
-        for name, task in self._tasks.items():
+        for name, task in self.tasks.items():
             if task is None:
                 continue
 
@@ -100,7 +98,7 @@ class NSQBasic:
                 logger.info(f"task {name} is canceled")
 
         # reset
-        self._tasks.clear()
+        self.tasks.clear()
 
         if self.writer is not None:
             self.reader.set_exception(ConnectionAbortedError())
@@ -236,7 +234,7 @@ class NSQBasic:
             return None
 
     async def _tx_worker(self):
-        logger.debug('tx worker is running')
+        logger.debug("tx worker is running")
 
         while self.is_connect:
             # break the main loop
@@ -257,7 +255,7 @@ class NSQBasic:
             logger.debug(f"tx worker is done")
 
     async def _rx_worker(self):
-        logger.debug('rx worker is running')
+        logger.debug("rx worker is running")
 
         while self.is_connect:
             # break the main loop
@@ -336,7 +334,7 @@ class NSQBasic:
         logger.debug(f"rx worker is done")
 
     async def _sub_worker(self):
-        logger.debug('sub worker is running')
+        logger.debug("sub worker is running")
 
         tasks = []
 
@@ -386,7 +384,7 @@ class NSQBasic:
         logger.debug(f"sub worker is done")
 
     async def _watchdog(self):
-        logger.debug('watchdog is running')
+        logger.debug("watchdog is running")
 
         # stauts is recover or normal
         while self.is_connect:
