@@ -28,6 +28,14 @@ class NSQBasic(NSQInterface):
     tx_queue: asyncio.Queue = field(default_factory=lambda: asyncio.Queue(maxsize=RDY_SIZE * 50))
     handler: Optional[Callable[[Any], Awaitable[bool]]] = None
 
+    async def pub(self, topic: str, data: bytes):
+        try:
+            await self.tx_queue.put((topic, data))
+        except asyncio.QueueFull:
+            return False
+
+        return True
+
     async def send_sub(self):
         await self.write(f"SUB {self.topic} {self.channel}\n")
 

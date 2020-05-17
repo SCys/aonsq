@@ -42,14 +42,6 @@ class NSQ(NSQBasic):
                 except asyncio.CancelledError:
                     pass
 
-    async def pub(self, topic: str, data: bytes):
-        try:
-            await self.tx_queue.put((topic, data))
-        except asyncio.QueueFull:
-            return False
-
-        return True
-
     async def sub(self, topic: str, channel: str, handler: Callable[[NSQMessage], Awaitable[bool]]):
         if topic not in self.sub_mq:
             self.sub_mq[topic] = {}
