@@ -82,9 +82,9 @@ class NSQBasic:
 
         for name, task in self.tasks.items():
             if self.topic and self.channel:
-                func = functools.partial(logger.debug, f"topic {self.topic}/{self.channel} task {name} is none")
+                func = functools.partial(logger.debug, f"topic {self.topic}/{self.channel} task {name} is done")
             else:
-                func = functools.partial(logger.debug, f"task {name} is none")
+                func = functools.partial(logger.debug, f"task {name} is done")
 
             task.add_done_callback(func)
 
@@ -102,7 +102,7 @@ class NSQBasic:
             try:
                 await task
             except asyncio.CancelledError:
-                logger.exception(f"task {name} cancel error")
+                logger.error(f"task {name} cancel error")
             else:
                 logger.info(f"task {name} is canceled")
 
@@ -110,7 +110,6 @@ class NSQBasic:
         self.tasks.clear()
 
         if self.writer is not None:
-            self.reader.set_exception(ConnectionAbortedError())
             self.writer.close()
 
             await self.writer.drain()
@@ -120,6 +119,11 @@ class NSQBasic:
             self.reader = None
 
             logger.info(f"connection is closed")
+
+        try:
+            self.reader.set_exception(ConnectionAbortedError())
+        except:
+            pass
 
         self.is_connect = False
 
@@ -398,11 +402,11 @@ class NSQBasic:
             if self.topic and self.channel:
                 logger.debug(f"topic {self.topic}/{self.channel} will be reconnected")
 
+            await self.disconnect()
+            await asyncio.sleep(2)
+
             while True:
                 try:
-                    await self.disconnect()
-                    await asyncio.sleep(2)
-
                     await self.connect()
 
                     if self.topic and self.channel:
@@ -410,6 +414,15 @@ class NSQBasic:
                         await self.send_rdy()
 
                     break
+
+                except ConnectionAbortedError:
+                    if self.topic and self.channel:
+                        logger.exception(f"topic {self.topic}/{self.channel} reconnect error")
+                    else:
+                        logger.exception(f"topic reconnect error")
+
+                    await asyncio.sleep(1)
+
                 except ConnectionError:
                     if self.topic and self.channel:
                         logger.exception(f"topic {self.topic}/{self.channel} reconnect error")
