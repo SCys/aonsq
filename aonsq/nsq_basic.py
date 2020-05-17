@@ -374,8 +374,10 @@ class NSQBasic:
 
                         await self.connect()
 
-                        await self.send_sub()
-                        await self.send_rdy()
+                        if self.topic and self.channel:
+                            await self.send_sub()
+                            await self.send_rdy()
+
                         break
                     except ConnectionError as exc:
                         logger.error(f"topic {self.topic}/{self.channel} reconnect error:{str(exc)}")
@@ -398,7 +400,7 @@ class NSQBasic:
         try:
             await self.writer.drain()
         except AssertionError as e:
-            logger.error(f"topic {self.topic}/{self.channel} assert error")
+            logger.error(f"topic assert error")
 
             if not self._connect_is_broken:
                 self._connect_is_broken = True
