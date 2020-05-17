@@ -186,7 +186,7 @@ class NSQInterface:
         except ConnectionError as exc:
             if not self._connect_is_broken:
                 self._connect_is_broken = True
-                logger.error(f"read error:{str(exc)}")
+                logger.exception(f"read error")
 
             return None
 

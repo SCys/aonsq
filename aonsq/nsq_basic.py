@@ -69,6 +69,9 @@ class NSQBasic(NSQInterface):
 
             resp = await self.read()
             if resp is None:
+                if self.topic and self.channel:
+                    logger.error(f"topic {self.topic}/{self.channel} read error")
+
                 break
 
             frame_type = int.from_bytes(resp[:4], byteorder="big")
