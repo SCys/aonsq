@@ -403,9 +403,6 @@ class NSQBasic:
             # wait for other worker is closed
             await asyncio.sleep(5)
 
-            if self.topic and self.channel:
-                logger.debug(f"topic {self.topic}/{self.channel} will be reconnected")
-
             try:
                 await self.disconnect()
             except:
@@ -423,6 +420,11 @@ class NSQBasic:
                     if self.topic and self.channel:
                         await self.send_sub()
                         await self.send_rdy()
+
+                    if self.topic and self.channel:
+                        logger.debug(f"topic {self.topic}/{self.channel} will be reconnected")
+                    else:
+                        logger.debug(f"will be reconnected")
 
                     break
 
