@@ -74,10 +74,12 @@ class NSQBasic:
         self.is_connect = True
         self._connect_is_broken = False
 
-        self.tasks["tx"] = asyncio.create_task(self._tx_worker())
-        self.tasks["rx"] = asyncio.create_task(self._rx_worker())
-        self.tasks["sub"] = asyncio.create_task(self._sub_worker())
-        self.tasks["watchdog"] = asyncio.create_task(self._watchdog())
+        loop = asyncio.get_event_loop()
+
+        self.tasks["tx"] = loop.create_task(self._tx_worker())
+        self.tasks["rx"] = loop.create_task(self._rx_worker())
+        self.tasks["sub"] = loop.create_task(self._sub_worker())
+        self.tasks["watchdog"] = loop.create_task(self._watchdog())
 
     async def disconnect(self):
         # cancel the tasks
@@ -85,7 +87,11 @@ class NSQBasic:
             if task is None:
                 continue
 
+            if task.cancelled():
+                continue
+
             task.cancel()
+
             try:
                 await task
             except asyncio.CancelledError:
@@ -230,6 +236,8 @@ class NSQBasic:
             return None
 
     async def _tx_worker(self):
+        logger.debug('tx worker is running')
+
         while self.is_connect:
             # break the main loop
             if self._connect_is_broken:
@@ -249,6 +257,7 @@ class NSQBasic:
             logger.debug(f"tx worker is done")
 
     async def _rx_worker(self):
+        logger.debug('rx worker is running')
 
         while self.is_connect:
             # break the main loop
@@ -327,6 +336,8 @@ class NSQBasic:
         logger.debug(f"rx worker is done")
 
     async def _sub_worker(self):
+        logger.debug('sub worker is running')
+
         tasks = []
 
         while self.is_connect:
@@ -375,6 +386,8 @@ class NSQBasic:
         logger.debug(f"sub worker is done")
 
     async def _watchdog(self):
+        logger.debug('watchdog is running')
+
         # stauts is recover or normal
         while self.is_connect:
             await asyncio.sleep(1)
