@@ -251,18 +251,20 @@ class NSQBasic:
                 break
 
             if self.rdy <= 0:
-                if self.topic and self.channel:
-                    logger.debug(f"sub {self.topic}/{self.channel} cost:{self.cost}")
+                # if self.topic and self.channel:
+                #     logger.debug(f"sub {self.topic}/{self.channel} cost:{self.cost}")
 
                 if await self.write(f"RDY {RDY_SIZE}\n"):
                     self.rdy = RDY_SIZE
 
+                await asyncio.sleep(TSK_OVER)
                 continue
 
             if self.rx_queue.empty():
                 await asyncio.sleep(TSK_OVER)
                 continue
 
+            # wait for anything
             if self.handler is None:
                 msg = await self.rx_queue.get()
 
