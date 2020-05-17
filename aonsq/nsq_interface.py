@@ -74,7 +74,20 @@ class NSQInterface:
     async def connect(self):
         logger.debug("nsq will be connected")
 
-        reader, writer = await asyncio.open_connection(self.host, self.port, limit=MSG_SIZE)
+        async def _async_connect():
+            return await asyncio.open_connection(self.host, self.port, limit=MSG_SIZE)
+
+        writer = None
+        reader = None
+        for i in range(3):
+            try:
+                reader, writer = await asyncio.wait_for(_async_connect, timeout=5.0)
+                break
+            except TimeoutError:
+                continue
+
+        if reader is None or writer is None:
+            raise TimeoutError()
 
         self.reader = reader
         self.writer = writer

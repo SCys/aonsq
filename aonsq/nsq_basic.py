@@ -210,21 +210,17 @@ class NSQBasic(NSQInterface):
             while not self.is_connect:
                 try:
                     await self.connect()
+                except TimeoutError:
+                    await asyncio.sleep(3)  # ext 3s wait for new connection
+                    continue
 
+            while True:
+                try:
                     if self.topic and self.channel:
                         await self.send_sub()
                         await self.send_rdy()
 
                     break  # once
-
-                except ConnectionAbortedError:
-                    if self.topic and self.channel:
-                        logger.exception(f"topic {self.topic}/{self.channel} reconnect error")
-                    else:
-                        logger.exception(f"topic reconnect error")
-
-                    await asyncio.sleep(1)
-
                 except ConnectionError:
                     if self.topic and self.channel:
                         logger.exception(f"topic {self.topic}/{self.channel} reconnect error")
