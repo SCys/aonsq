@@ -81,6 +81,8 @@ class NSQInterface:
             try:
                 logger.debug(f"nsq {self.host}:{self.port} will be connected #{i}")
                 reader, writer = await asyncio.wait_for(_async_connect(), timeout=5.0)
+
+                logger.debug(f"nsq {self.host}:{self.port} is connected #{i}")
                 break
             except TimeoutError:
                 logger.warning(f"connect timeout in #{i}")
@@ -94,6 +96,7 @@ class NSQInterface:
         self.writer = writer
 
         await self.write(b"  V2")
+        logger.debug(f"nsq {self.host}:{self.port} is connected #{i}")
 
         if not await self.send_identify():
             logger.warning("send identify error")
@@ -175,19 +178,26 @@ class NSQInterface:
         else:
             raise TypeError("invalid data type")
 
+        async def _async_write(self):
+            try:
+                await self.writer.drain()
+            except AssertionError as e:
+                logger.exception("writer assert error")
+
+                if not self._connect_is_broken:
+                    self._connect_is_broken = True
+
+            except ConnectionError:
+                logger.error("write connection error")
+
+                # logger.error(f"topic {self.topic}/{self.channel} connection error")
+                if not self._connect_is_broken:
+                    self._connect_is_broken = True
+
         try:
-            await self.writer.drain()
-        except AssertionError as e:
-            logger.exception("writer assert error")
+            await asyncio.wait_for(_async_write(self), timeout=5.0)
+        except TimeoutError:
 
-            if not self._connect_is_broken:
-                self._connect_is_broken = True
-
-            return False
-        except ConnectionError:
-            logger.error("write connection error")
-
-            # logger.error(f"topic {self.topic}/{self.channel} connection error")
             if not self._connect_is_broken:
                 self._connect_is_broken = True
 
