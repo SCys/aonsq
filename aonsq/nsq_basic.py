@@ -207,18 +207,13 @@ class NSQBasic(NSQInterface):
                 else:
                     logger.exception(f"topic disconnect error")
 
-            while True:
+            while not self.is_connect:
                 try:
                     await self.connect()
 
                     if self.topic and self.channel:
                         await self.send_sub()
                         await self.send_rdy()
-
-                    if self.topic and self.channel:
-                        logger.debug(f"topic {self.topic}/{self.channel} will be reconnected")
-                    else:
-                        logger.debug(f"will be reconnected")
 
                     break  # once
 
@@ -237,6 +232,11 @@ class NSQBasic(NSQInterface):
                         logger.exception(f"topic reconnect error")
 
                     await asyncio.sleep(1)
+
+            if self.topic and self.channel:
+                logger.debug(f"topic {self.topic}/{self.channel} reconnected")
+            else:
+                logger.debug(f"reconnected")
 
     async def _sub_worker_async_task(self, handler, msg):
         try:

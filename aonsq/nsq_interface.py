@@ -72,6 +72,8 @@ class NSQInterface:
         return False
 
     async def connect(self):
+        logger.debug("nsq will be connected")
+
         reader, writer = await asyncio.open_connection(self.host, self.port, limit=MSG_SIZE)
 
         self.reader = reader
@@ -98,6 +100,8 @@ class NSQInterface:
 
         # for name, task in self.tasks.items():
         #     task.add_done_callback(functools.partial(logger.debug, f"task {name} is done"))
+
+        logger.debug("nsq is connected")
 
     async def disconnect(self):
         # cancel the tasks
