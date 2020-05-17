@@ -1,10 +1,10 @@
+import asyncio
 from dataclasses import dataclass, field
 from typing import Awaitable, Callable, Dict
 
-import orjson
-
 import aiohttp
 import loguru
+import orjson
 
 from .nsq_basic import NSQBasic
 from .nsq_message import NSQMessage
@@ -29,6 +29,14 @@ class NSQ(NSQBasic):
             for channel, mq in channels.items():
                 logger.debug(f"closing topic {topic} channel {channel}")
                 await mq.disconnect()
+
+    async def pub(self, topic: str, data: bytes):
+        try:
+            await self.tx_queue.put((topic, data))
+        except asyncio.QueueFull:
+            return False
+
+        return True
 
     async def sub(self, topic: str, channel: str, handler: Callable[[NSQMessage], Awaitable[bool]]):
         if topic not in self.sub_mq:
