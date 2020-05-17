@@ -196,7 +196,6 @@ class NSQBasic:
 
             elif frame_type == 1:  # error
                 err_msg: str = frame_data.decode()
-                logger.warning(f"topic {self.topic} logic error:{err_msg}")
 
                 # clear the rx_queue
                 if err_msg.startswith("E_FIN_FAILED"):
@@ -213,7 +212,12 @@ class NSQBasic:
                     # reset the rdy
                     self.rdy = 0
 
-                    logger.debug(f"topic {self.topic} rx queue is reset")
+                    if self.topic and self.channel:
+                        logger.debug(f"topic {self.topic}/{self.channel} rx queue is reset")
+                        self._connect_is_broken = True
+                        continue
+
+                logger.warning(f"topic {self.topic}/{self.channel} logic error:{err_msg}")
 
                 continue
 
