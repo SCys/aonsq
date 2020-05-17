@@ -86,6 +86,7 @@ class NSQInterface:
                 continue
 
         if reader is None or writer is None:
+            logger.error("connect error")
             raise TimeoutError()
 
         self.reader = reader

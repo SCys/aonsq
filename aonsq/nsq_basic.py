@@ -31,6 +31,8 @@ class NSQBasic(NSQInterface):
     async def send_sub(self):
         await self.write(f"SUB {self.topic} {self.channel}\n")
 
+        logger.debug(f"nsq {self.host}:{self.port} is sub topic {self.topic}/{self.channel}")
+
     async def send_rdy(self):
         await self.write(f"RDY {self.rdy}\n")
 
@@ -207,9 +209,10 @@ class NSQBasic(NSQInterface):
                 else:
                     logger.exception(f"topic disconnect error")
 
-            while not self.is_connect:
+            while True:
                 try:
                     await self.connect()
+                    break  # once
                 except TimeoutError:
                     await asyncio.sleep(3)  # ext 3s wait for new connection
                     continue
