@@ -98,6 +98,7 @@ class NSQBasic:
 
             self.writer = None
             self.reader = None
+            logger.info(f"connection is closed")
 
         self.is_connect = False
 
