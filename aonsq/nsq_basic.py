@@ -1,4 +1,5 @@
 import asyncio
+import functools
 import random
 import string
 import traceback
@@ -78,6 +79,9 @@ class NSQBasic:
         self.tasks["rx"] = loop.create_task(self._rx_worker())
         self.tasks["sub"] = loop.create_task(self._sub_worker())
         self.tasks["watchdog"] = loop.create_task(self._watchdog())
+
+        for name, task in self.tasks.items():
+            task.add_done_callback(functools.partial(logger.debug, f"task {name} is none"))
 
     async def disconnect(self):
         # cancel the tasks
@@ -249,11 +253,6 @@ class NSQBasic:
             await self.send_pub(topic, content)
             self.tx_queue.task_done()
 
-        if self.topic and self.channel:
-            logger.debug(f"topic {self.topic}/{self.channel} tx worker is done")
-        else:
-            logger.debug(f"tx worker is done")
-
     async def _rx_worker(self):
         logger.debug("rx worker is running")
 
@@ -331,8 +330,6 @@ class NSQBasic:
 
             logger.debug(f"frame {frame_type} /{frame_data}/")
 
-        logger.debug(f"rx worker is done")
-
     async def _sub_worker(self):
         logger.debug("sub worker is running")
 
@@ -380,8 +377,6 @@ class NSQBasic:
                 done, pending = await asyncio.wait(tasks, timeout=TSK_OVER)
                 tasks = list(pending)
                 # d(f"total {len(done)} tasks is done")
-
-        logger.debug(f"sub worker is done")
 
     async def _watchdog(self):
         logger.debug("watchdog is running")
