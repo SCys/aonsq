@@ -155,13 +155,14 @@ class NSQBasic:
                 continue
 
             topic, content = await self.tx_queue.get()
-            result = await self.send_pub(topic, content)
+            await self.send_pub(topic, content)
             self.tx_queue.task_done()
 
-            if not result:
-                break
+        if self.topic and self.channel:
+            logger.debug(f"topic {self.topic}/{self.channel} tx worker is done")
+        else:
+            logger.debug(f"tx worker is done")
 
-        logger.debug(f"tx worker is done")
         self._busy_tx = False
 
     async def _rx_worker(self):
