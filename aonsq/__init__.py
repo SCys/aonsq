@@ -5,15 +5,26 @@ from asyncio.streams import StreamReader, StreamWriter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, Dict, Optional
-
+import sys
 import aiohttp
 import orjson
-from loguru import logger
+from loguru import logger as root_logger
+
+root_logger.add(
+    sys.stderr,
+    encoding="utf8",
+    format="[{level} {time} {file}:{function}:{line}]{message}",
+    filter=lambda r: "aonsq" in r["extra"],
+    level="INFO",
+)
+
+logger = root_logger.bind(aonsq=True)
 
 i = logger.info
 d = logger.debug
 w = logger.warning
 e = logger.error
+x = logger.exception
 
 PKG_MAGIC = b"  V2"
 RDY_SIZE = 1000
@@ -112,7 +123,7 @@ class NSQBasic:
             {
                 "hostname": await public_ip(),
                 "client_id": "".join(random.choice(string.ascii_lowercase) for _ in range(8)),
-                "user_agent": "aonsq.py/0.0.3",
+                "user_agent": "aonsq.py/0.0.5",
                 "deflate": True,
                 "deflate_level": 5,
             }
@@ -179,8 +190,8 @@ class NSQBasic:
 
                     self.sent += content[0]
 
-                except ConnectionError as exc:
-                    w(f"connection error, recovery the unsent messages:{str(exc)}")
+                except ConnectionError:
+                    x(f"connection error, recovery the unsent messages")
 
                     # recovery in the tx_queue end
                     for item in queues:
@@ -208,8 +219,8 @@ class NSQBasic:
                 self._connect_is_broken = True
                 break
 
-            except asyncio.exceptions.IncompleteReadError as exc:
-                e(f"steam incomplete read error:{str(exc)}")
+            except asyncio.exceptions.IncompleteReadError:
+                x(f"steam incomplete read error")
 
                 self._connect_is_broken = True
                 break
@@ -221,8 +232,8 @@ class NSQBasic:
 
             try:
                 resp = await self.reader.readexactly(size)
-            except ConnectionError as exc:
-                e(f"read content connection error:{str(exc)}")
+            except ConnectionError:
+                x(f"read content connection error")
 
                 self._connect_is_broken = True
                 continue
@@ -288,8 +299,8 @@ class NSQBasic:
                         self.writer.write(f"RDY {self.rdy}\n".encode())
                         await self.writer.drain()
                         break
-                    except ConnectionError as e:
-                        w(f"rdy with connection error:{e}")
+                    except ConnectionError:
+                        x(f"rdy with connection error")
                         self.reader.set_exception(e)
                         await asyncio.sleep(3)
 
