@@ -208,7 +208,7 @@ class NSQBasic:
                 self._connect_is_broken = True
                 break
 
-            except asyncio.streams.IncompleteReadError as exc:
+            except asyncio.exceptions.IncompleteReadError as exc:
                 e(f"steam incomplete read error:{str(exc)}")
 
                 self._connect_is_broken = True
