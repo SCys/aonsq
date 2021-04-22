@@ -122,7 +122,7 @@ class NSQBasic:
             {
                 "hostname": await public_ip(),
                 "client_id": "".join(random.choice(string.ascii_lowercase) for _ in range(8)),
-                "user_agent": "aonsq.py/0.0.5",
+                "user_agent": "aonsq.py/0.0.6",
                 "deflate": True,
                 "deflate_level": 5,
             }
