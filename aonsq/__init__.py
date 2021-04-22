@@ -12,7 +12,6 @@ from loguru import logger as root_logger
 
 root_logger.add(
     sys.stderr,
-    encoding="utf8",
     format="[{level} {time} {file}:{function}:{line}]{message}",
     filter=lambda r: "aonsq" in r["extra"],
     level="INFO",
