@@ -107,6 +107,8 @@ class NSQBasic:
             asyncio.create_task(self._watchdog())
 
     async def disconnect(self):
+        self.is_connect = False
+
         if self.writer is not None:
             self.writer.close()
 
@@ -114,8 +116,6 @@ class NSQBasic:
 
             self.writer = None
             self.reader = None
-
-        self.is_connect = False
 
     async def send_identify(self):
         info = orjson.dumps(
@@ -219,7 +219,10 @@ class NSQBasic:
                 break
 
             except asyncio.exceptions.IncompleteReadError:
-                e(f"steam incomplete read error")
+                if not self.is_connect:
+                    break
+
+                x(f"steam incomplete read error")
 
                 self._connect_is_broken = True
                 break
