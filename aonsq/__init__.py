@@ -1,11 +1,12 @@
 import asyncio
 import random
 import string
+import sys
 from asyncio.streams import StreamReader, StreamWriter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, Dict, Optional
-import sys
+
 import aiohttp
 import orjson
 from loguru import logger as root_logger
@@ -32,7 +33,7 @@ MSG_SIZE = 1024 * 1024  # default is 1Mb
 
 async def public_ip():
     async with aiohttp.ClientSession() as session:
-        async with session.get("https://api.ip.sb/ip") as response:
+        async with session.get("http://whatismyip.akamai.com") as response:
             return await response.text()
 
 
