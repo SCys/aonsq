@@ -219,11 +219,7 @@ class NSQBasic:
                 break
 
             except asyncio.exceptions.IncompleteReadError:
-                # ignore read error after disconnected
-                if not self.is_connect:
-                    break
-
-                x(f"steam incomplete read error")
+                e(f"steam incomplete read error")
 
                 self._connect_is_broken = True
                 break
