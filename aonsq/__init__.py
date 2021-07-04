@@ -302,7 +302,7 @@ class NSQBasic:
                         self.writer.write(f"RDY {self.rdy}\n".encode())
                         await self.writer.drain()
                         break
-                    except ConnectionError:
+                    except ConnectionError as e:
                         x(f"rdy with connection error")
                         self.reader.set_exception(e)
                         await asyncio.sleep(3)
@@ -321,6 +321,12 @@ class NSQBasic:
                 await self.writer.drain()
             except ConnectionError as e:
                 w(f"fin/req with connection error")
+                self.reader.set_exception(e)
+
+                self._connect_is_broken = True
+                break
+            except Exception as e:
+                w(f"unknown exception")
                 self.reader.set_exception(e)
 
                 self._connect_is_broken = True
