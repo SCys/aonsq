@@ -307,37 +307,38 @@ class NSQBasic:
                         self.reader.set_exception(e)
                         await asyncio.sleep(3)
 
+                    await asyncio.sleep(0.2)
+
             self.rdy -= 1
             send_fin = True
             if self.handler is not None:
                 send_fin = await self.handler(msg)
 
-            if not self.writer:
-                if not self._connect_is_broken:
-                    self._connect_is_broken = True
-                break
-
             try:
-                if send_fin:
-                    self.writer.write(f"FIN {msg.id}\n".encode())
-                else:
-                    self.writer.write(f"REQ {msg.id}\n".encode())
+                if self.writer:
+                    if send_fin:
+                        self.writer.write(f"FIN {msg.id}\n".encode())
+                    else:
+                        self.writer.write(f"REQ {msg.id}\n".encode())
 
-                await self.writer.drain()
+                    await self.writer.drain()
             except ConnectionError as e:
                 w(f"fin/req with connection error")
                 self.reader.set_exception(e)
 
+                self._busy_sub = False
                 self._connect_is_broken = True
                 break
             except Exception as e:
-                w(f"unknown exception")
+                w(f"fin/req with unknown exception")
                 self.reader.set_exception(e)
 
+                self._busy_sub = False
                 self._connect_is_broken = True
                 break
 
             self.rx_queue.task_done()
+            # await asyncio.sleep(0.001)
 
         self._busy_sub = False
 
