@@ -312,6 +312,11 @@ class NSQBasic:
             if self.handler is not None:
                 send_fin = await self.handler(msg)
 
+            if not self.writer:
+                if not self._connect_is_broken:
+                    self._connect_is_broken = True
+                break
+
             try:
                 if send_fin:
                     self.writer.write(f"FIN {msg.id}\n".encode())
