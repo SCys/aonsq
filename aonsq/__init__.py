@@ -88,8 +88,6 @@ class NSQBasic:
 
         self.is_connect = True
 
-        # d(f"nsq:{self.host}:{self.port}")
-
         if not await self.send_identify():
             w("send identify error")
             self.is_connect = False
@@ -111,19 +109,22 @@ class NSQBasic:
         self.is_connect = False
 
         if self.writer is not None:
-            self.writer.close()
+            try:
+                self.writer.close()
 
-            await self.writer.wait_closed()
+                await self.writer.wait_closed()
+            except BrokenPipeError:
+                pass
 
-            self.writer = None
-            self.reader = None
+        self.writer = None
+        self.reader = None
 
     async def send_identify(self):
         info = orjson.dumps(
             {
                 "hostname": await public_ip(),
                 "client_id": "".join(random.choice(string.ascii_lowercase) for _ in range(8)),
-                "user_agent": "aonsq.py/0.0.6",
+                "user_agent": "aonsq.py/0.1.5",
                 "deflate": True,
                 "deflate_level": 5,
             }
@@ -259,9 +260,16 @@ class NSQBasic:
                 continue
 
             elif frame_type == 1:  # error
-                w(f"error response:{frame_data.decode()}")
+                # logic error
+                _data = frame_data.decode()
 
-                self._connect_is_broken = True
+                if frame_data.startswith(b"E_"):
+                    parts = _data.split(" ")
+                    w(f"{parts[0]} {parts[1]} {parts[2]}:{' '.join(parts[3:])}")
+                    continue
+
+                w(f"unknown error response:{_data}")
+                # self._connect_is_broken = True
                 break
 
             elif frame_type == 2:  # message
