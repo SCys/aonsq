@@ -27,14 +27,18 @@ e = logger.error
 x = logger.exception
 
 PKG_MAGIC = b"  V2"
-RDY_SIZE = 1000
+RDY_SIZE = 50
 MSG_SIZE = 1024 * 1024  # default is 1Mb
 
 
 async def public_ip():
-    async with aiohttp.ClientSession() as session:
-        async with session.get("http://whatismyip.akamai.com") as response:
-            return await response.text()
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get("http://whatismyip.akamai.com") as response:
+            # async with session.get("http://ip.sb") as response:
+                return await response.text()
+    except:
+        return '127.0.0.1'
 
 
 @dataclass
@@ -113,8 +117,8 @@ class NSQBasic:
                 self.writer.close()
 
                 await self.writer.wait_closed()
-            except BrokenPipeError:
-                pass
+            except Exception as e:
+                w(f"ignore disconnect exception:{e}")
 
         self.writer = None
         self.reader = None
@@ -270,7 +274,7 @@ class NSQBasic:
 
                 w(f"unknown error response:{_data}")
                 # self._connect_is_broken = True
-                break
+                continue
 
             elif frame_type == 2:  # message
                 # msg_raw = zlib.decompress(frame_data)
@@ -300,6 +304,9 @@ class NSQBasic:
 
         while self.is_connect:
             msg = await self.rx_queue.get()
+
+            self.rx_queue.task_done()
+            # await asyncio.sleep(0.001)
 
             if self.rdy <= 0:
                 # d(f"sub {self.topic} {self.channel} cost {self.cost}")
@@ -344,9 +351,6 @@ class NSQBasic:
                 self._busy_sub = False
                 self._connect_is_broken = True
                 break
-
-            self.rx_queue.task_done()
-            # await asyncio.sleep(0.001)
 
         self._busy_sub = False
 

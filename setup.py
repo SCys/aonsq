@@ -8,7 +8,7 @@ with open("requirements.txt") as f:
 
 setuptools.setup(
     name="aonsq",
-    version="0.1.5",
+    version="0.1.6",
     author="SCys",
     author_email="me@iscys.com",
     description="an other async nsq client library",
