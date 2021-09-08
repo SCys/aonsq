@@ -105,7 +105,7 @@ class NSQBasic:
             {
                 "hostname": await public_ip(),
                 "client_id": "".join(random.choice(string.ascii_lowercase) for _ in range(8)),
-                "user_agent": "aonsq.py/0.1.7",
+                "user_agent": "aonsq.py/0.1.8",
                 "deflate": True,
                 "deflate_level": 5,
             }
@@ -304,7 +304,7 @@ class NSQBasic:
             send_fin = True
             if self.handler is not None:
                 try:
-                    send_fin = asyncio.wait_for(self.handler(msg), timeout=HDR_TIMEOUT)
+                    send_fin = await asyncio.wait_for(self.handler(msg), timeout=HDR_TIMEOUT)
                 except asyncio.TimeoutError:
                     w(f"message {msg.id} wait timeout for handler, will agress the message")
 
