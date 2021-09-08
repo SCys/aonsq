@@ -1,6 +1,6 @@
 # aonsq
 
-an other async nsq client library
+nsq client
 
 ## Example
 

@@ -8,10 +8,10 @@ with open("requirements.txt") as f:
 
 setuptools.setup(
     name="aonsq",
-    version="0.1.6",
+    version="0.1.7",
     author="SCys",
     author_email="me@iscys.com",
-    description="an other async nsq client library",
+    description="nsq client library",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/SCys/aonsq",
@@ -22,8 +22,6 @@ setuptools.setup(
         "License :: OSI Approved :: Apache Software License",
         "Operating System :: OS Independent",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.6",
-        "Programming Language :: Python :: 3.7",
     ],
     python_requires=">=3.6",
     install_requires=requirements,
